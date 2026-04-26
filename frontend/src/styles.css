@@ -1,0 +1,445 @@
+:root {
+  font-family: Georgia, "Times New Roman", serif;
+  color: #172121;
+  background:
+    radial-gradient(circle at top, rgba(228, 192, 137, 0.26), transparent 28rem),
+    linear-gradient(180deg, #f3ecdf 0%, #e4d6bf 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.landing-shell,
+.reader-shell {
+  min-height: 100vh;
+  padding: 28px;
+}
+
+.landing-shell {
+  display: grid;
+  place-items: center;
+}
+
+.landing-card,
+.pdf-page-card,
+.reader-header {
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.84);
+  box-shadow: 0 24px 60px rgba(54, 38, 18, 0.14);
+}
+
+.landing-card {
+  width: min(760px, 100%);
+  padding: 32px;
+}
+
+.landing-kicker,
+.reader-kicker {
+  margin: 0 0 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: #8a5a24;
+}
+
+.landing-title,
+.reader-title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 4rem);
+  line-height: 0.98;
+}
+
+.landing-copy,
+.reader-copy {
+  max-width: 52rem;
+  margin: 18px 0 0;
+  color: rgba(23, 33, 33, 0.76);
+  font-size: 1.02rem;
+}
+
+.landing-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.field-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 8px;
+  background: rgba(233, 223, 204, 0.56);
+}
+
+.fieldset-card {
+  margin: 0;
+  border: 0;
+}
+
+.inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  font-weight: 700;
+}
+
+.inline-control input {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.field-hint {
+  color: rgba(23, 33, 33, 0.64);
+  font-size: 0.9rem;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(23, 33, 33, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.primary-button,
+.secondary-button {
+  justify-self: start;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: #172121;
+  color: #f7f1e4;
+}
+
+.primary-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.secondary-button {
+  background: rgba(23, 33, 33, 0.08);
+  color: #172121;
+}
+
+.reader-settings {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 20;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.settings-button {
+  padding: 11px 15px;
+  border: 1px solid rgba(23, 33, 33, 0.16);
+  border-radius: 8px;
+  background: #172121;
+  color: #f7f1e4;
+  box-shadow: 0 10px 26px rgba(23, 33, 33, 0.22);
+  cursor: pointer;
+}
+
+.reader-settings-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 150px;
+  padding: 12px;
+  border: 1px solid rgba(23, 33, 33, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.96);
+  box-shadow: 0 14px 34px rgba(54, 38, 18, 0.18);
+}
+
+.llm-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 7px 10px;
+  border: 1px solid rgba(23, 33, 33, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 251, 245, 0.96);
+  box-shadow: 0 10px 24px rgba(54, 38, 18, 0.16);
+  color: #172121;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.llm-status-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #8a5a24;
+}
+
+.llm-status-pending .llm-status-dot {
+  border: 2px solid rgba(138, 90, 36, 0.28);
+  border-top-color: #8a5a24;
+  background: transparent;
+  animation: llm-status-spin 780ms linear infinite;
+}
+
+.llm-status-complete .llm-status-dot {
+  background: #2d7650;
+}
+
+.llm-status-failed .llm-status-dot {
+  background: #a42817;
+}
+
+.llm-status-idle .llm-status-dot {
+  background: #787267;
+}
+
+@keyframes llm-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error-banner {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(164, 40, 23, 0.12);
+  color: #7a2418;
+}
+
+.reader-shell {
+  display: grid;
+  gap: 22px;
+}
+
+.reader-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+}
+
+.pdf-stack {
+  display: grid;
+  gap: 22px;
+}
+
+.pdf-page-card {
+  padding: 20px;
+}
+
+.pdf-page-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: rgba(23, 33, 33, 0.66);
+  font-size: 0.92rem;
+}
+
+.pdf-page-stage {
+  position: relative;
+  max-width: 100%;
+}
+
+.pdf-page-canvas,
+.pdf-page-placeholder {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.pdf-page-canvas {
+  pointer-events: none;
+}
+
+.pdf-text-layer,
+.pdf-overlay-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-text-layer {
+  overflow: hidden;
+  pointer-events: auto;
+  line-height: 1;
+  opacity: 1;
+  z-index: 2;
+  user-select: text;
+}
+
+.pdf-text-layer span,
+.pdf-text-layer br {
+  position: absolute;
+  color: transparent;
+  transform-origin: top left;
+  user-select: text;
+}
+
+.pdf-text-layer span {
+  cursor: text;
+  white-space: pre;
+}
+
+.pdf-text-layer ::selection {
+  background: rgba(75, 122, 255, 0.26);
+}
+
+.pdf-overlay-layer {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.pdf-page-placeholder {
+  background:
+    linear-gradient(135deg, rgba(205, 190, 165, 0.42), rgba(244, 236, 224, 0.88)),
+    repeating-linear-gradient(
+      180deg,
+      rgba(23, 33, 33, 0.04) 0,
+      rgba(23, 33, 33, 0.04) 24px,
+      transparent 24px,
+      transparent 40px
+    );
+}
+
+.overlay-frame {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 2px;
+  border: 1px solid rgba(181, 140, 36, 0.95);
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(255, 236, 170, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 248, 214, 0.45);
+  pointer-events: none;
+}
+
+.overlay-representation-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--overlay-stack-gap, 6px);
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  transition: opacity 90ms linear;
+}
+
+.overlay-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  max-height: 100%;
+  padding: var(--overlay-badge-padding-y, 4px) var(--overlay-badge-padding-x, 7px);
+  border-radius: 8px;
+  background: rgba(146, 92, 24, 0.94);
+  box-shadow: 0 2px 8px rgba(79, 47, 8, 0.18);
+  color: #fff8ea;
+  font-size: var(--overlay-font-size, 0.94rem);
+  line-height: 1.25;
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.overlay-badge-summary {
+  display: -webkit-box;
+  max-width: 100%;
+  padding: var(--overlay-badge-padding-y, 5px) var(--overlay-badge-padding-x, 8px);
+  font-size: var(--overlay-summary-font-size, 0.98rem);
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--overlay-summary-lines, 3);
+  background: rgba(97, 66, 24, 0.94);
+}
+
+.overlay-badge-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--overlay-keyword-gap, 4px);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.overlay-keyword {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--overlay-keyword-padding-y, 3px) var(--overlay-keyword-padding-x, 7px);
+  border: 1px solid rgba(255, 248, 234, 0.22);
+  border-radius: 7px;
+  background: rgba(146, 92, 24, 0.96);
+  box-shadow: 0 2px 7px rgba(79, 47, 8, 0.18);
+  color: #fff8ea;
+  font-size: var(--overlay-keyword-font-size, 0.94rem);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .landing-shell,
+  .reader-shell {
+    padding: 16px;
+  }
+
+  .landing-card,
+  .reader-header,
+  .pdf-page-card {
+    padding: 18px;
+  }
+
+  .reader-header {
+    flex-direction: column;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}

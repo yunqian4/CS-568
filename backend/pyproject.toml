@@ -1,0 +1,18 @@
+[project]
+name = "pdfreader-backend"
+version = "0.1.0"
+description = "Web-based PDF reader backend with chunk overlays."
+requires-python = ">=3.14"
+dependencies = [
+    "docling>=2.82.0,<3.0.0",
+    "fastapi>=0.115.0,<1.0.0",
+    "httpx>=0.28.0,<1.0.0",
+    "pymupdf>=1.25.0,<2.0.0",
+    "python-multipart>=0.0.20,<1.0.0",
+    "uvicorn>=0.34.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+opendataloader = [
+    "opendataloader-pdf>=2.0.0,<3.0.0",
+]

@@ -1,0 +1,14 @@
+.env
+backend/.env
+frontend/.env
+*.env.local
+__pycache__/
+*.py[cod]
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+dat/temp/
+backend/pdfreader_backend.egg-info/
+backend/dev/docling-artifacts/
+dev/storage/
+frontend/.codex-vite-*.log
