@@ -1,15 +1,63 @@
 import { useState } from 'react';
 import PdfReaderCanvas from './PdfReaderCanvas';
+import { defaultCustomRepresentationSettings } from '../representationSettings';
 
-export default function ReaderPage({ document, onReset }) {
+function nextCustomName(settings) {
+  const names = new Set(settings.map((setting) => setting.name.trim().toLowerCase()));
+  let index = 1;
+  while (names.has(`custom ${index}`)) {
+    index += 1;
+  }
+  return `custom ${index}`;
+}
+
+export default function ReaderPage({
+  document,
+  onClearRepresentationCookie,
+  onLoadRepresentationCookie,
+  onRegenerateRepresentations,
+  onRepresentationSettingsChange,
+  onReset,
+  onResetRepresentationSettings,
+  onSaveRepresentationCookie,
+  representationSettings,
+  settingsMessage,
+}) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [visibleRepresentations, setVisibleRepresentations] = useState({
-    keywords: true,
-    summary: true,
-  });
+  const [showDebugLabels, setShowDebugLabels] = useState(false);
+  const [regenerationApiKey, setRegenerationApiKey] = useState('');
+  const [regenerationModel, setRegenerationModel] = useState(document.metadata?.llm_representations?.model ?? '');
+  const visibleRepresentations = Object.fromEntries(
+    [
+      ...representationSettings.flatMap((setting) => [[setting.id, setting.enabled], [setting.name, setting.enabled]]),
+      ['block-label', showDebugLabels],
+    ],
+  );
 
-  function toggleRepresentation(kind) {
-    setVisibleRepresentations((current) => ({ ...current, [kind]: !current[kind] }));
+  function updateSetting(id, patch) {
+    onRepresentationSettingsChange(
+      representationSettings.map((setting) => (setting.id === id ? { ...setting, ...patch } : setting)),
+    );
+  }
+
+  function addRepresentation() {
+    const customDefaults = defaultCustomRepresentationSettings();
+    onRepresentationSettingsChange([
+      ...representationSettings,
+      {
+        id: `custom-${Date.now()}`,
+        name: nextCustomName(representationSettings),
+        prompt: 'Write a concise representation of this paragraph.',
+        background_color: customDefaults.background_color,
+        background_opacity: customDefaults.background_opacity,
+        enabled: true,
+        isDefault: false,
+      },
+    ]);
+  }
+
+  function removeRepresentation(id) {
+    onRepresentationSettingsChange(representationSettings.filter((setting) => setting.id !== id || setting.isDefault));
   }
 
   return (
@@ -25,28 +73,126 @@ export default function ReaderPage({ document, onReset }) {
         </button>
       </header>
 
-      <PdfReaderCanvas document={document} visibleRepresentations={visibleRepresentations} />
+      <PdfReaderCanvas
+        document={document}
+        representationSettings={representationSettings}
+        visibleRepresentations={visibleRepresentations}
+      />
 
       <div className="reader-settings">
         <RepresentationStatusIcon status={document.metadata?.llm_representations} />
         {isSettingsOpen ? (
           <div className="reader-settings-panel">
-            <label className="inline-control">
+            <div className="reader-settings-heading">
+              <strong>Representations</strong>
+              <button className="settings-mini-button" onClick={addRepresentation} type="button">Add</button>
+            </div>
+            <label className="inline-control reader-debug-toggle">
               <input
-                checked={visibleRepresentations.keywords}
-                onChange={() => toggleRepresentation('keywords')}
+                checked={showDebugLabels}
+                onChange={(event) => setShowDebugLabels(event.target.checked)}
                 type="checkbox"
               />
-              <span>Keywords</span>
+              <span>Paragraph IDs</span>
             </label>
-            <label className="inline-control">
+            <div className="reader-representation-list">
+              {representationSettings.map((setting) => (
+                <section className="reader-representation-card" key={setting.id}>
+                  <div className="reader-representation-row">
+                    <label className="inline-control">
+                      <input
+                        checked={setting.enabled}
+                        onChange={(event) => updateSetting(setting.id, { enabled: event.target.checked })}
+                        type="checkbox"
+                      />
+                      <span>Visible</span>
+                    </label>
+                    <input
+                      aria-label={`${setting.name} background color`}
+                      className="settings-color-input"
+                      onChange={(event) => updateSetting(setting.id, { background_color: event.target.value })}
+                      type="color"
+                      value={setting.background_color}
+                    />
+                    <label className="settings-opacity-control">
+                      <span>Opacity {Math.round((setting.background_opacity ?? 1) * 100)}%</span>
+                      <input
+                        aria-label={`${setting.name} background opacity`}
+                        max="1"
+                        min="0"
+                        onChange={(event) => updateSetting(setting.id, { background_opacity: Number(event.target.value) })}
+                        step="0.05"
+                        type="range"
+                        value={setting.background_opacity ?? 1}
+                      />
+                    </label>
+                    {setting.isDefault ? null : (
+                      <button
+                        className="settings-mini-button"
+                        onClick={() => removeRepresentation(setting.id)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <label className="settings-field">
+                    <span>Name</span>
+                    <input
+                      className="text-input"
+                      onChange={(event) => updateSetting(setting.id, { name: event.target.value })}
+                      type="text"
+                      value={setting.name}
+                    />
+                  </label>
+                  <label className="settings-field">
+                    <span>Prompt</span>
+                    <textarea
+                      className="text-input settings-prompt-input"
+                      onChange={(event) => updateSetting(setting.id, { prompt: event.target.value })}
+                      rows={4}
+                      value={setting.prompt}
+                    />
+                  </label>
+                </section>
+              ))}
+            </div>
+            <div className="reader-settings-actions">
               <input
-                checked={visibleRepresentations.summary}
-                onChange={() => toggleRepresentation('summary')}
-                type="checkbox"
+                className="text-input settings-regenerate-input"
+                onChange={(event) => setRegenerationApiKey(event.target.value)}
+                placeholder="OpenAI key for regeneration"
+                type="password"
+                value={regenerationApiKey}
               />
-              <span>Summaries</span>
-            </label>
+              <input
+                className="text-input settings-regenerate-input"
+                onChange={(event) => setRegenerationModel(event.target.value)}
+                placeholder="Model"
+                type="text"
+                value={regenerationModel}
+              />
+              <button
+                className="primary-button settings-panel-button"
+                onClick={() => onRegenerateRepresentations({ apiKey: regenerationApiKey, model: regenerationModel })}
+                type="button"
+              >
+                Submit prompts
+              </button>
+              <button className="secondary-button settings-panel-button" onClick={onResetRepresentationSettings} type="button">
+                Reset defaults
+              </button>
+              <button className="secondary-button settings-panel-button" onClick={onSaveRepresentationCookie} type="button">
+                Save cookie
+              </button>
+              <button className="secondary-button settings-panel-button" onClick={onLoadRepresentationCookie} type="button">
+                Load cookie
+              </button>
+              <button className="secondary-button settings-panel-button" onClick={onClearRepresentationCookie} type="button">
+                Clear cookie
+              </button>
+            </div>
+            {settingsMessage ? <p className="reader-settings-status">{settingsMessage}</p> : null}
           </div>
         ) : null}
         <button

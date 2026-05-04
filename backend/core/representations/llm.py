@@ -6,7 +6,8 @@ import json
 import math
 import os
 import re
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -16,6 +17,75 @@ from ..models import PdfBlockRepresentation, PdfDocument
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_MODEL = "gpt-5-nano"
 WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'-]*")
+DEFAULT_KEYWORDS_PROMPT = (
+    "Extract concise, specific noun phrases from the paragraph text. "
+    "Use the text's own terminology and avoid generic UI or process labels."
+)
+DEFAULT_SUMMARY_PROMPT = (
+    "Write one concise summary of the paragraph's main claim or finding. "
+    "Use only the supplied paragraph text."
+)
+DEFAULT_KEYWORDS_BACKGROUND = "#7a4a12"
+DEFAULT_SUMMARY_BACKGROUND = "#263238"
+DEFAULT_BACKGROUND_OPACITY = 1.0
+RETRYABLE_OPENAI_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
+
+
+@dataclass(slots=True)
+class RepresentationDefinition:
+    """User-editable prompt and display settings for one representation."""
+
+    name: str
+    prompt: str
+    background_color: str = DEFAULT_SUMMARY_BACKGROUND
+    background_opacity: float = DEFAULT_BACKGROUND_OPACITY
+    enabled: bool = True
+
+    def normalized(self) -> "RepresentationDefinition":
+        """Return a trimmed definition with stable fallbacks."""
+
+        name = " ".join(str(self.name or "").split()).strip() or "representation"
+        prompt = str(self.prompt or "").strip() or DEFAULT_SUMMARY_PROMPT
+        background_color = str(self.background_color or "").strip() or DEFAULT_SUMMARY_BACKGROUND
+        background_opacity = _bounded_float(self.background_opacity, DEFAULT_BACKGROUND_OPACITY, minimum=0.0, maximum=1.0)
+        return RepresentationDefinition(
+            name=name,
+            prompt=prompt,
+            background_color=background_color,
+            background_opacity=background_opacity,
+            enabled=bool(self.enabled),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return public representation settings without secrets."""
+
+        normalized = self.normalized()
+        return {
+            "name": normalized.name,
+            "prompt": normalized.prompt,
+            "background_color": normalized.background_color,
+            "background_opacity": normalized.background_opacity,
+            "enabled": normalized.enabled,
+        }
+
+
+def default_representation_definitions() -> list[RepresentationDefinition]:
+    """Return fresh default representation definitions."""
+
+    return [
+        RepresentationDefinition(
+            name="keywords",
+            prompt=DEFAULT_KEYWORDS_PROMPT,
+            background_color=DEFAULT_KEYWORDS_BACKGROUND,
+            background_opacity=DEFAULT_BACKGROUND_OPACITY,
+        ),
+        RepresentationDefinition(
+            name="summary",
+            prompt=DEFAULT_SUMMARY_PROMPT,
+            background_color=DEFAULT_SUMMARY_BACKGROUND,
+            background_opacity=DEFAULT_BACKGROUND_OPACITY,
+        ),
+    ]
 
 
 @dataclass(slots=True)
@@ -29,9 +99,11 @@ class LlmRepresentationConfig:
     summary_min_words: int = 35
     summary_word_ratio: float = 0.15
     max_keywords: int = 5
+    representations: list[RepresentationDefinition] = field(default_factory=default_representation_definitions)
     batch_size: int = 12
-    parallel_jobs: int = 4
-    timeout_seconds: float = 60.0
+    parallel_jobs: int = 2
+    timeout_seconds: float = 300.0
+    request_retries: int = 3
     endpoint: str = OPENAI_RESPONSES_URL
 
     @classmethod
@@ -45,6 +117,7 @@ class LlmRepresentationConfig:
         summary_min_words: int | None = None,
         summary_word_ratio: float | None = None,
         max_keywords: int | None = None,
+        representations: list[RepresentationDefinition] | None = None,
     ) -> "LlmRepresentationConfig":
         """Build a validated config from request values and environment defaults."""
 
@@ -56,7 +129,10 @@ class LlmRepresentationConfig:
             summary_min_words=_positive_int(summary_min_words, 35),
             summary_word_ratio=_bounded_float(summary_word_ratio, 0.15, minimum=0.02, maximum=0.80),
             max_keywords=_positive_int(max_keywords, 5),
-            parallel_jobs=_bounded_int(os.environ.get("OPENAI_REPRESENTATION_PARALLELISM"), 4, minimum=1, maximum=8),
+            representations=_normalize_definitions(representations),
+            parallel_jobs=_bounded_int(os.environ.get("OPENAI_REPRESENTATION_PARALLELISM"), 2, minimum=1, maximum=8),
+            timeout_seconds=_bounded_float(os.environ.get("OPENAI_REQUEST_TIMEOUT_SECONDS"), 300.0, minimum=10.0, maximum=600.0),
+            request_retries=_bounded_int(os.environ.get("OPENAI_REQUEST_RETRIES"), 3, minimum=0, maximum=5),
         )
 
 
@@ -116,18 +192,20 @@ def enrich_document_representations(
 def _build_block_task(block, config: LlmRepresentationConfig) -> dict[str, Any]:
     word_count = len(WORD_RE.findall(block.text))
     tasks: list[str] = []
-    if word_count >= config.keyword_min_words:
-        tasks.append("keywords")
-    if word_count >= config.summary_min_words:
-        tasks.append("summary")
+    definitions = {definition.name: definition for definition in _enabled_definitions(config)}
+    for definition in definitions.values():
+        threshold = config.keyword_min_words if _is_keyword_definition(definition.name) else config.summary_min_words
+        if word_count >= threshold:
+            tasks.append(definition.name)
 
     return {
         "block_id": block.block_id,
         "text": block.text,
         "word_count": word_count,
         "tasks": tasks,
+        "definitions": {name: definition.to_dict() for name, definition in definitions.items()},
         "max_keywords": config.max_keywords,
-        "summary_target_words": _summary_target_words(word_count, config) if "summary" in tasks else 0,
+        "summary_target_words": _summary_target_words(word_count, config),
     }
 
 
@@ -144,15 +222,39 @@ def _representations_for_block(
         return []
 
     representations: list[PdfBlockRepresentation] = []
-    if "keywords" in task["tasks"]:
-        keywords = _normalize_keywords(generated.get("keywords"), limit=config.max_keywords)
-        if keywords:
-            representations.append(PdfBlockRepresentation(kind="keywords", label="Keywords", items=keywords))
+    definitions = {definition.name: definition for definition in _enabled_definitions(config)}
+    for kind in task["tasks"]:
+        definition = definitions.get(kind)
+        if not definition:
+            continue
 
-    if "summary" in task["tasks"]:
-        summary = _normalize_summary(generated.get("summary"), target_words=task["summary_target_words"])
-        if summary:
-            representations.append(PdfBlockRepresentation(kind="summary", label="Summary", text=summary))
+        if _is_keyword_definition(kind):
+            keywords = _normalize_keywords(generated.get(kind) or generated.get("keywords"), limit=config.max_keywords)
+            if keywords:
+                representations.append(
+                    PdfBlockRepresentation(
+                        kind=kind,
+                        label=_label_for_kind(kind),
+                        value=", ".join(keywords),
+                        background_color=definition.background_color,
+                        background_opacity=definition.background_opacity,
+                        items=keywords,
+                    )
+                )
+            continue
+
+        value = _normalize_summary(generated.get(kind) or generated.get("summary") or generated.get("value"), target_words=task["summary_target_words"])
+        if value:
+            representations.append(
+                PdfBlockRepresentation(
+                    kind=kind,
+                    label=_label_for_kind(kind),
+                    value=value,
+                    background_color=definition.background_color,
+                    background_opacity=definition.background_opacity,
+                    text=value,
+                )
+            )
 
     return representations
 
@@ -166,6 +268,7 @@ def _call_openai_batch(
     response_payload = _post_openai_response(
         api_key=api_key,
         config=config,
+        operation="OpenAI representation generation",
         body={
             "model": config.model,
             "instructions": (
@@ -215,15 +318,13 @@ def _call_openai_representation(
 ) -> dict[str, Any]:
     """Generate one compact representation for one paragraph block."""
 
-    if kind not in {"keywords", "summary"}:
-        raise ValueError(f"Unsupported representation kind: {kind}")
-
     budgets = _single_output_token_budgets(task=task, kind=kind)
     for index, max_output_tokens in enumerate(budgets):
         try:
             response_payload = _post_openai_response(
                 api_key=api_key,
                 config=config,
+                operation="OpenAI representation generation",
                 body={
                     "model": config.model,
                     "instructions": _single_instructions(task=task, kind=kind),
@@ -249,15 +350,26 @@ def _call_openai_representation(
 
 
 def _single_instructions(*, task: dict[str, Any], kind: str) -> str:
-    if kind == "keywords":
+    definition = _definition_from_task(task, kind)
+    instruction = str(definition.get("prompt") or "").strip()
+    if _is_keyword_definition(kind):
         return (
             f"Return JSON only. Extract up to {int(task.get('max_keywords') or 5)} specific noun phrases "
-            "from the text. Use the text's own terminology. Avoid generic UI/process labels."
+            "from the text as an array under key k. "
+            f"Representation instruction: {instruction or DEFAULT_KEYWORDS_PROMPT}"
+        )
+
+    if kind == "summary":
+        return (
+            f"Return JSON only. Write one summary under key s, about {int(task.get('summary_target_words') or 12)} words when appropriate. "
+            "State the paragraph's main claim or finding. Do not add outside facts. "
+            f"Representation instruction: {instruction or DEFAULT_SUMMARY_PROMPT}"
         )
 
     return (
-        f"Return JSON only. Write one summary of about {int(task.get('summary_target_words') or 12)} words. "
-        "State the paragraph's main claim or finding. Do not add outside facts."
+        f"Return JSON only. Write one text value under key v, about {int(task.get('summary_target_words') or 12)} words when appropriate. "
+        "Do not add outside facts. "
+        f"Representation instruction: {instruction or DEFAULT_SUMMARY_PROMPT}"
     )
 
 
@@ -268,28 +380,62 @@ def _parse_single_representation_payload(payload: dict[str, Any], *, kind: str) 
     except json.JSONDecodeError as error:
         raise ValueError("OpenAI returned non-JSON representation output.") from error
 
-    if kind == "keywords":
+    if _is_keyword_definition(kind):
         return {"keywords": parsed.get("k", [])}
-    return {"summary": parsed.get("s", "")}
+    if kind == "summary":
+        return {"summary": parsed.get("v", parsed.get("s", ""))}
+    return {kind: parsed.get("v", "")}
 
 
 def _post_openai_response(
     *,
     api_key: str,
-    config: LlmRepresentationConfig,
+    config: Any,
     body: dict[str, Any],
+    operation: str = "OpenAI request",
 ) -> dict[str, Any]:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    try:
-        with httpx.Client(timeout=config.timeout_seconds) as client:
-            response = client.post(config.endpoint, headers=headers, json=body)
-            response.raise_for_status()
-    except httpx.HTTPError as error:
-        raise ValueError(f"OpenAI representation generation failed: {error}") from error
-    return response.json()
+    attempts = max(1, int(getattr(config, "request_retries", 1) or 0) + 1)
+    for attempt in range(attempts):
+        try:
+            with httpx.Client(timeout=config.timeout_seconds) as client:
+                response = client.post(config.endpoint, headers=headers, json=body)
+                response.raise_for_status()
+            return response.json()
+        except (httpx.TimeoutException, httpx.TransportError) as error:
+            if attempt == attempts - 1:
+                raise ValueError(f"{operation} failed: {error}") from error
+            _sleep_before_retry(attempt=attempt, response=None)
+        except httpx.HTTPError as error:
+            response = getattr(error, "response", None)
+            if _should_retry_http_error(error) and attempt < attempts - 1:
+                _sleep_before_retry(attempt=attempt, response=response)
+                continue
+            raise ValueError(f"{operation} failed: {error}") from error
+
+    raise ValueError(f"{operation} failed.")
+
+
+def _should_retry_http_error(error: httpx.HTTPError) -> bool:
+    response = getattr(error, "response", None)
+    return bool(response is not None and response.status_code in RETRYABLE_OPENAI_STATUS_CODES)
+
+
+def _sleep_before_retry(*, attempt: int, response: httpx.Response | None) -> None:
+    time.sleep(_retry_delay_seconds(attempt=attempt, response=response))
+
+
+def _retry_delay_seconds(*, attempt: int, response: httpx.Response | None) -> float:
+    retry_after = response.headers.get("retry-after") if response is not None else None
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 0.0), 20.0)
+        except ValueError:
+            pass
+    return min(2.0**attempt, 20.0)
 
 
 def _extract_output_text(payload: dict[str, Any]) -> str:
@@ -422,7 +568,7 @@ def _response_schema() -> dict[str, Any]:
 
 
 def _single_response_schema(kind: str) -> dict[str, Any]:
-    if kind == "keywords":
+    if _is_keyword_definition(kind):
         return {
             "type": "object",
             "properties": {
@@ -438,9 +584,9 @@ def _single_response_schema(kind: str) -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
-            "s": {"type": "string"},
+            ("s" if kind == "summary" else "v"): {"type": "string"},
         },
-        "required": ["s"],
+        "required": ["s" if kind == "summary" else "v"],
         "additionalProperties": False,
     }
 
@@ -511,10 +657,14 @@ def _positive_int(value: int | None, default: int) -> int:
     return max(1, int(value))
 
 
-def _bounded_float(value: float | None, default: float, *, minimum: float, maximum: float) -> float:
+def _bounded_float(value: float | str | None, default: float, *, minimum: float, maximum: float) -> float:
     if value is None:
         return default
-    return min(max(float(value), minimum), maximum)
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return min(max(parsed, minimum), maximum)
 
 
 def _bounded_int(value: int | str | None, default: int, *, minimum: int, maximum: int) -> int:
@@ -525,3 +675,37 @@ def _bounded_int(value: int | str | None, default: int, *, minimum: int, maximum
     except (TypeError, ValueError):
         return default
     return min(max(parsed, minimum), maximum)
+
+
+def _normalize_definitions(definitions: list[RepresentationDefinition] | None) -> list[RepresentationDefinition]:
+    """Normalize user definitions and ensure stable unique names."""
+
+    active = definitions or default_representation_definitions()
+    normalized: list[RepresentationDefinition] = []
+    seen: set[str] = set()
+    for definition in active:
+        item = definition.normalized()
+        key = item.name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(item)
+    return normalized or default_representation_definitions()
+
+
+def _enabled_definitions(config: LlmRepresentationConfig) -> list[RepresentationDefinition]:
+    return [definition.normalized() for definition in config.representations if definition.enabled]
+
+
+def _definition_from_task(task: dict[str, Any], kind: str) -> dict[str, Any]:
+    definitions = task.get("definitions") if isinstance(task.get("definitions"), dict) else {}
+    definition = definitions.get(kind)
+    return definition if isinstance(definition, dict) else {}
+
+
+def _is_keyword_definition(kind: str) -> bool:
+    return str(kind).strip().lower() == "keywords"
+
+
+def _label_for_kind(kind: str) -> str:
+    return " ".join(part.capitalize() for part in str(kind).replace("_", " ").split())

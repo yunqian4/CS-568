@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import LandingPage from './components/LandingPage';
 import ReaderPage from './components/ReaderPage';
+import {
+  clearCookieRepresentationSettings,
+  readCookieRepresentationSettings,
+  readSessionRepresentationSettings,
+  resetRepresentationSettings,
+  saveCookieRepresentationSettings,
+  toRepresentationDefinitions,
+  writeSessionRepresentationSettings,
+} from './representationSettings';
 
 function getRouteDocumentId() {
   const match = window.location.pathname.match(/^\/reader\/([^/]+)$/);
@@ -11,6 +20,8 @@ export default function App() {
   const [documentData, setDocumentData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [representationSettings, setRepresentationSettings] = useState(readSessionRepresentationSettings);
+  const [settingsMessage, setSettingsMessage] = useState('');
   const routeDocumentId = useMemo(getRouteDocumentId, [window.location.pathname]);
 
   useEffect(() => {
@@ -43,6 +54,9 @@ export default function App() {
         if (!response.ok || cancelled) {
           return;
         }
+        if (payload.status !== 'failed') {
+          clearRepresentationErrorMessage(setErrorMessage);
+        }
         setDocumentData((current) => mergeRepresentationSnapshot(current, payload));
       } catch {
         // Polling is best-effort; the reader remains usable without generated badges.
@@ -66,6 +80,7 @@ export default function App() {
     const body = new FormData();
     body.append('file', file);
     appendRepresentationFormFields(body, representationOptions);
+    body.append('representations', JSON.stringify(toRepresentationDefinitions(representationSettings)));
     await submitDocument(`/api/documents/upload?provider=${encodeURIComponent(provider)}`, { body, method: 'POST' });
   }
 
@@ -74,11 +89,80 @@ export default function App() {
       body: JSON.stringify({
         provider,
         url,
-        llm_options: buildLlmOptionsPayload(representationOptions),
+        llm_options: {
+          ...buildLlmOptionsPayload(representationOptions),
+          representations: toRepresentationDefinitions(representationSettings),
+        },
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     });
+  }
+
+  function handleRepresentationSettingsChange(nextSettings) {
+    setSettingsMessage('');
+    setRepresentationSettings(nextSettings);
+    writeSessionRepresentationSettings(nextSettings);
+  }
+
+  function handleResetRepresentationSettings() {
+    const nextSettings = resetRepresentationSettings();
+    handleRepresentationSettingsChange(nextSettings);
+    setSettingsMessage('Representation settings reset for this session.');
+  }
+
+  function handleSaveRepresentationCookie() {
+    saveCookieRepresentationSettings(representationSettings);
+    setSettingsMessage('Representation settings saved to cookies.');
+  }
+
+  function handleLoadRepresentationCookie() {
+    const cookieSettings = readCookieRepresentationSettings();
+    if (!cookieSettings) {
+      setSettingsMessage('No saved cookie settings found.');
+      return;
+    }
+    handleRepresentationSettingsChange(cookieSettings);
+    setSettingsMessage('Cookie settings loaded into this session.');
+  }
+
+  function handleClearRepresentationCookie() {
+    clearCookieRepresentationSettings();
+    setSettingsMessage('Saved cookie settings cleared.');
+  }
+
+  async function handleRegenerateRepresentations(options = {}) {
+    if (!documentData?.document_id) {
+      return;
+    }
+
+    setErrorMessage('');
+    setSettingsMessage('');
+    try {
+      const provider = documentData.provider ?? documentData.metadata?.provider ?? 'opendataloader';
+      const response = await fetch(`/api/documents/${documentData.document_id}/representations/regenerate`, {
+        body: JSON.stringify({
+          provider,
+          llm_options: {
+            enabled: true,
+            api_key: options.apiKey?.trim() || null,
+            model: options.model?.trim() || documentData.metadata?.llm_representations?.model || null,
+            representations: toRepresentationDefinitions(representationSettings),
+          },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail ?? 'Unable to regenerate representations.');
+      }
+      setDocumentData(payload);
+      setSettingsMessage('Representation jobs restarted for this document.');
+    } catch (error) {
+      setErrorMessage(error.message);
+      setSettingsMessage(error.message);
+    }
   }
 
   async function submitDocument(endpoint, requestInit) {
@@ -119,13 +203,23 @@ export default function App() {
       setDocumentData(null);
       setErrorMessage('');
       window.history.pushState({}, '', '/');
-    }} />
+    }}
+      onClearRepresentationCookie={handleClearRepresentationCookie}
+      onLoadRepresentationCookie={handleLoadRepresentationCookie}
+      onRegenerateRepresentations={handleRegenerateRepresentations}
+      onRepresentationSettingsChange={handleRepresentationSettingsChange}
+      onResetRepresentationSettings={handleResetRepresentationSettings}
+      onSaveRepresentationCookie={handleSaveRepresentationCookie}
+      representationSettings={representationSettings}
+      settingsMessage={settingsMessage}
+    />
   ) : (
     <LandingPage
       errorMessage={errorMessage}
       isSubmitting={isSubmitting}
       onUploadSubmit={handleUploadSubmit}
       onUrlSubmit={handleUrlSubmit}
+      representationSettings={representationSettings}
     />
   );
 }
@@ -234,6 +328,9 @@ function representationsEqual(first, second) {
   return (
     first.kind === second.kind
     && first.label === second.label
+    && (first.value ?? '') === (second.value ?? '')
+    && (first.background_color ?? '') === (second.background_color ?? '')
+    && Number(first.background_opacity ?? 1) === Number(second.background_opacity ?? 1)
     && (first.text ?? null) === (second.text ?? null)
     && arraysEqual(first.items ?? [], second.items ?? [])
   );
@@ -241,6 +338,16 @@ function representationsEqual(first, second) {
 
 function objectsEqual(first, second) {
   return JSON.stringify(first ?? {}) === JSON.stringify(second ?? {});
+}
+
+function clearRepresentationErrorMessage(setErrorMessage) {
+  setErrorMessage((current) => (
+    isRepresentationGenerationError(current) ? '' : current
+  ));
+}
+
+function isRepresentationGenerationError(message) {
+  return String(message || '').toLowerCase().includes('representation generation failed');
 }
 
 function arraysEqual(first, second) {

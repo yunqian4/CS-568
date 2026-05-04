@@ -16,11 +16,15 @@ const KEYWORD_GAP = 4;
 
 export function assignOverlayRepresentations({ chunks, representationsByKind }) {
   const regions = chunks.map((chunk, index) => buildRegion(chunk, index));
-  const summary = representationsByKind.get('summary');
-  const keywords = representationsByKind.get('keywords');
+  const uniqueRepresentations = dedupeRepresentationsByKind([...representationsByKind.values()]);
+  const summary = uniqueRepresentations.find((representation) => representation.kind === 'summary');
+  const keywords = uniqueRepresentations.find((representation) => representation.kind === 'keywords');
+  const genericRepresentations = uniqueRepresentations.filter(
+    (representation) => !['keywords', 'summary'].includes(representation.kind),
+  );
   const assignments = new Map(regions.map((region) => [region.chunk.chunk_id, []]));
 
-  if (!regions.length || (!summary && !keywords)) {
+  if (!regions.length || (!summary && !keywords && !genericRepresentations.length)) {
     return assignments;
   }
 
@@ -31,8 +35,23 @@ export function assignOverlayRepresentations({ chunks, representationsByKind }) 
   if (layout.keywordRegion && keywords) {
     assignments.get(layout.keywordRegion.chunk.chunk_id)?.push(keywords);
   }
+  genericRepresentations.forEach((representation, index) => {
+    const region = layout.summaryRegion || layout.keywordRegion || regions[index % regions.length];
+    assignments.get(region.chunk.chunk_id)?.push(representation);
+  });
 
   return assignments;
+}
+
+function dedupeRepresentationsByKind(representations) {
+  const unique = new Map();
+  for (const representation of representations) {
+    if (!representation?.kind || unique.has(representation.kind)) {
+      continue;
+    }
+    unique.set(representation.kind, representation);
+  }
+  return [...unique.values()];
 }
 
 function chooseLayout({ keywords, regions, summary }) {
@@ -95,9 +114,9 @@ function scoreFit(region, neededHeight) {
 
 function estimateFootprint(representation, kind, contentWidth) {
   if (kind === 'keywords') {
-    return estimateKeywordFootprint(representation.items ?? [], contentWidth);
+    return estimateKeywordFootprint(keywordItems(representation), contentWidth);
   }
-  return estimateSummaryFootprint(representation.text || representation.items?.join(' ') || '', contentWidth);
+  return estimateSummaryFootprint(representation.value || representation.text || representation.items?.join(' ') || '', contentWidth);
 }
 
 function estimateSummaryFootprint(text, contentWidth) {
@@ -105,6 +124,13 @@ function estimateSummaryFootprint(text, contentWidth) {
   const estimatedLines = Math.ceil(String(text).length * 7 / availableWidth);
   const lines = Math.max(1, Math.min(SUMMARY_MAX_LINES, estimatedLines));
   return { height: lines * SUMMARY_LINE_HEIGHT + 10 };
+}
+
+function keywordItems(representation) {
+  if (representation.items?.length) {
+    return representation.items;
+  }
+  return String(representation.value ?? '').split(',').map((item) => item.trim()).filter(Boolean);
 }
 
 function estimateKeywordFootprint(items, contentWidth) {

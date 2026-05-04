@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import fitz
+import httpx
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -29,15 +30,22 @@ from core.ingest.grobid_pdf import (
 from core.ingest.opendataloader_pdf import build_parsed_document_from_opendataloader_json
 from core.ingest.opendataloader_pdf import ensure_java_on_path
 from core.ingest.contracts import ParsedPdfChunk, ParsedPdfDocument, ParsedPdfPage
-from core.ingest.llm_semantic import LlmSemanticConfig, apply_llm_semantic_grouping
+from core.ingest.llm_semantic import (
+    LlmSemanticConfig,
+    _semantic_input,
+    _semantic_instructions,
+    apply_llm_semantic_grouping,
+)
 from core.ingest import parse_pdf_bytes
 from core.ingest.builders import build_pdf_document_from_parsed_pdf
 from core.representations.llm import (
     LlmRepresentationConfig,
+    RepresentationDefinition,
     _estimate_max_output_tokens,
     _estimate_single_max_output_tokens,
     _extract_output_text,
     _parse_single_representation_payload,
+    _post_openai_response,
     enrich_document_representations,
 )
 from core.representations.jobs import initialize_representation_jobs, representation_snapshot, run_representation_jobs
@@ -234,8 +242,91 @@ class PdfIngestTests(unittest.TestCase):
             self.assertEqual(document.blocks[0].text, "First paragraph part one. First paragraph part two.")
             self.assertEqual(document.blocks[0].section_path, ["1 Introduction"])
             self.assertEqual(document.pages[0].chunks[0].block_ids, [])
+            self.assertEqual(document.blocks[0].block_id, "paragraph-0001")
             self.assertEqual((Path(temp_root) / "llm" / "semantic-input.json").exists(), True)
             self.assertEqual((Path(temp_root) / "llm" / "semantic.json").exists(), True)
+
+    def test_llm_semantic_input_preserves_opendataloader_chunk_order(self) -> None:
+        parsed_document = ParsedPdfDocument(
+            title="Two column provider order",
+            pages=[
+                ParsedPdfPage(
+                    page_number=1,
+                    width=600,
+                    height=800,
+                    chunks=[
+                        ParsedPdfChunk(
+                            chunk_id="opendataloader-001-0001",
+                            page_number=1,
+                            text="Left column continuation.",
+                            x=0.1,
+                            y=0.6,
+                            width=0.35,
+                            height=0.04,
+                        ),
+                        ParsedPdfChunk(
+                            chunk_id="opendataloader-001-0002",
+                            page_number=1,
+                            text="Right column top.",
+                            x=0.55,
+                            y=0.1,
+                            width=0.35,
+                            height=0.04,
+                        ),
+                    ],
+                )
+            ],
+            metadata={"parser": "opendataloader-pdf", "presegmented_chunks": True},
+        )
+
+        semantic_input = _semantic_input(parsed_document)
+
+        self.assertEqual(
+            [chunk["chunk_id"] for chunk in semantic_input["chunks"]],
+            ["opendataloader-001-0001", "opendataloader-001-0002"],
+        )
+        self.assertEqual([chunk["reading_order"] for chunk in semantic_input["chunks"]], [0, 1])
+
+    def test_llm_semantic_grouping_sorts_output_by_provider_reading_order(self) -> None:
+        parsed_document = _build_opendataloader_parsed_document_for_llm()
+        llm_output = {
+            "title": "LLM Paper",
+            "ignored_chunk_ids": [],
+            "paragraphs": [
+                {
+                    "paragraph_id": "later",
+                    "chunk_ids": ["opendataloader-001-0004"],
+                    "section_path": ["1 Introduction"],
+                    "role": "body",
+                },
+                {
+                    "paragraph_id": "earlier",
+                    "chunk_ids": ["opendataloader-001-0003"],
+                    "section_path": ["1 Introduction"],
+                    "role": "body",
+                },
+            ],
+        }
+
+        with patch("core.ingest.llm_semantic._call_semantic_llm", return_value=llm_output):
+            apply_llm_semantic_grouping(
+                parsed_document,
+                LlmSemanticConfig.from_values(enabled=True, api_key="test-key"),
+            )
+
+        paragraphs = parsed_document.metadata["llm_semantic_groups"]["paragraphs"]
+        self.assertEqual(
+            [paragraph["chunk_ids"][0] for paragraph in paragraphs],
+            ["opendataloader-001-0003", "opendataloader-001-0004"],
+        )
+
+    def test_llm_semantic_prompt_instructs_paragraph_chunk_merging(self) -> None:
+        instructions = _semantic_instructions()
+
+        self.assertIn("multiple chunk_ids", instructions)
+        self.assertIn("sentence-complete", instructions)
+        self.assertIn("starts lowercase", instructions)
+        self.assertIn("Do not reorder chunks by bounding boxes", instructions)
 
     def test_llm_semantic_grouping_rejects_unknown_chunk_ids(self) -> None:
         parsed_document = _build_opendataloader_parsed_document_for_llm()
@@ -569,6 +660,94 @@ class PdfIngestTests(unittest.TestCase):
         self.assertTrue(any(block["representations"] for block in second_payload["blocks"]))
         self.assertIn("generated keyword", json.dumps(second_payload["blocks"]))
 
+    def test_cached_opendataloader_import_reuses_semantic_cache_when_representation_prompts_change(self) -> None:
+        pdf_bytes = _build_semantic_pdf_bytes()
+        expected_hash = hashlib.sha256(pdf_bytes).hexdigest()
+        semantic_output = {
+            "title": "LLM Paper",
+            "ignored_chunk_ids": ["opendataloader-001-0001"],
+            "paragraphs": [
+                {
+                    "paragraph_id": "p-001",
+                    "chunk_ids": ["opendataloader-001-0003", "opendataloader-001-0004"],
+                    "section_path": ["1 Introduction"],
+                    "role": "body",
+                }
+            ],
+        }
+
+        default_config = backend_app.LlmRepresentationConfig.from_values(
+            enabled=True,
+            api_key="test-key",
+            keyword_min_words=3,
+            summary_min_words=5,
+        )
+        changed_prompt_config = backend_app.LlmRepresentationConfig.from_values(
+            enabled=True,
+            api_key="test-key",
+            keyword_min_words=3,
+            summary_min_words=5,
+            representations=[
+                RepresentationDefinition(
+                    name="keywords",
+                    prompt="Extract only domain-specific terms.",
+                    background_color="#5f3510",
+                ),
+                RepresentationDefinition(
+                    name="summary",
+                    prompt="Write a very direct one-sentence takeaway.",
+                    background_color="#1f2933",
+                    background_opacity=1.0,
+                ),
+            ],
+        )
+
+        def fake_call_openai_representation(*, api_key, config, task, kind):
+            return {"keywords": ["semantic cache"]} if kind == "keywords" else {"summary": "Cached summary."}
+
+        with TemporaryDirectory() as temp_root:
+            original_root = backend_app.TEMP_DOCUMENT_ROOT
+            backend_app.TEMP_DOCUMENT_ROOT = Path(temp_root)
+            try:
+                with (
+                    patch("backend.app.parse_pdf_provider_output", return_value=_build_opendataloader_parsed_document_for_llm()),
+                    patch("backend.core.ingest.llm_semantic._call_semantic_llm", return_value=semantic_output),
+                    patch(
+                        "backend.core.representations.llm._call_openai_representation",
+                        side_effect=fake_call_openai_representation,
+                    ),
+                ):
+                    first_payload = backend_app._store_and_parse_pdf(
+                        source_name="opendataloader.pdf",
+                        pdf_bytes=pdf_bytes,
+                        provider="opendataloader",
+                        llm_config=default_config,
+                    )
+
+                with patch("backend.app.parse_pdf_provider_output", side_effect=AssertionError("semantic cache was not used")):
+                    second_payload = backend_app._store_and_parse_pdf(
+                        source_name="opendataloader.pdf",
+                        pdf_bytes=pdf_bytes,
+                        provider="opendataloader",
+                        llm_config=changed_prompt_config,
+                        background_tasks=backend_app.BackgroundTasks(),
+                    )
+            finally:
+                backend_app.TEMP_DOCUMENT_ROOT = original_root
+
+            manifest = json.loads((Path(temp_root) / expected_hash / "manifest.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(second_payload["document_id"], first_payload["document_id"])
+        self.assertEqual(second_payload["metadata"]["cache_profile"], first_payload["metadata"]["cache_profile"])
+        self.assertNotEqual(
+            second_payload["metadata"]["representation_profile"],
+            first_payload["metadata"]["representation_profile"],
+        )
+        self.assertEqual(second_payload["metadata"]["llm_representations"]["status"], "pending")
+        self.assertEqual(second_payload["metadata"]["llm_representations"]["total_jobs"], 2)
+        self.assertEqual(second_payload["blocks"][0]["representations"], [])
+        self.assertEqual(manifest["providers"]["opendataloader"]["status"], "parsed")
+
     def test_store_and_parse_pdf_ignores_old_cache_versions(self) -> None:
         pdf_bytes = _build_semantic_pdf_bytes()
         expected_hash = hashlib.sha256(pdf_bytes).hexdigest()
@@ -840,6 +1019,41 @@ class PdfIngestTests(unittest.TestCase):
                 }
             )
 
+    def test_openai_request_retries_rate_limit_responses(self) -> None:
+        request = httpx.Request("POST", "https://api.openai.com/v1/responses")
+        responses = [
+            httpx.Response(429, headers={"retry-after": "0"}, request=request),
+            httpx.Response(200, json={"output_text": "{}"}, request=request),
+        ]
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def post(self, *args, **kwargs):
+                return responses.pop(0)
+
+        config = LlmRepresentationConfig(enabled=True, api_key="test-key", request_retries=1)
+        with (
+            patch("core.representations.llm.httpx.Client", FakeClient),
+            patch("core.representations.llm.time.sleep") as sleep,
+        ):
+            payload = _post_openai_response(
+                api_key="test-key",
+                config=config,
+                operation="OpenAI test request",
+                body={"model": "test-model", "input": "test"},
+            )
+
+        self.assertEqual(payload, {"output_text": "{}"})
+        sleep.assert_called_once_with(0.0)
+
     def test_representation_output_token_budget_allows_reasoning_models(self) -> None:
         self.assertGreaterEqual(
             _estimate_max_output_tokens(
@@ -915,7 +1129,54 @@ class PdfIngestTests(unittest.TestCase):
         self.assertEqual(captured_tasks[0]["summary_target_words"], 15)
         representation_by_kind = {item.kind: item for item in document.blocks[1].representations}
         self.assertEqual(representation_by_kind["keywords"].items, ["semantic parsing", "layout analysis"])
+        self.assertEqual(representation_by_kind["keywords"].value, "semantic parsing, layout analysis")
         self.assertLessEqual(len(representation_by_kind["summary"].text.split()), 23)
+
+    def test_custom_representation_definition_generates_string_value_and_color(self) -> None:
+        document = build_pdf_document_from_parsed_pdf(
+            document_id="doc-custom-rep",
+            source_name="custom.pdf",
+            provider="native",
+            parsed_document=ParsedPdfDocument(
+                title="custom.pdf",
+                metadata={"presegmented_chunks": True},
+                pages=[
+                    ParsedPdfPage(
+                        page_number=1,
+                        width=420,
+                        height=560,
+                        chunks=[_chunk("chunk-001-0001", " ".join(f"semantic{i}" for i in range(20)))],
+                    )
+                ],
+            ),
+        )
+
+        def fake_call_openai_representation(*, api_key, config, task, kind):
+            self.assertEqual(kind, "takeaway")
+            self.assertIn("takeaway", task["definitions"])
+            return {"takeaway": "Custom generated takeaway."}
+
+        config = LlmRepresentationConfig.from_values(
+            enabled=True,
+            api_key="test-key",
+            summary_min_words=3,
+            representations=[
+                RepresentationDefinition(
+                    name="takeaway",
+                    prompt="Write one takeaway.",
+                    background_color="#ffeeaa",
+                    background_opacity=0.35,
+                )
+            ],
+        )
+        with patch("core.representations.llm._call_openai_representation", side_effect=fake_call_openai_representation):
+            enrich_document_representations(document, config)
+
+        representation = document.blocks[0].representations[0]
+        self.assertEqual(representation.kind, "takeaway")
+        self.assertEqual(representation.value, "Custom generated takeaway.")
+        self.assertEqual(representation.background_color, "#ffeeaa")
+        self.assertEqual(representation.background_opacity, 0.35)
 
     def test_llm_representations_require_user_or_default_key(self) -> None:
         document = build_pdf_document_from_parsed_pdf(
