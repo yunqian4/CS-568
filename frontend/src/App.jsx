@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import LandingPage from './components/LandingPage';
 import ReaderPage from './components/ReaderPage';
 import {
@@ -23,6 +23,7 @@ export default function App() {
   const [representationSettings, setRepresentationSettings] = useState(readSessionRepresentationSettings);
   const [settingsMessage, setSettingsMessage] = useState('');
   const routeDocumentId = useMemo(getRouteDocumentId, [window.location.pathname]);
+  const reportedRepresentationFailuresRef = useRef(new Set());
 
   useEffect(() => {
     if (!routeDocumentId || documentData?.document_id === routeDocumentId) {
@@ -31,6 +32,26 @@ export default function App() {
 
     setErrorMessage('This route has no loaded document in the current page state. Please import the PDF again.');
   }, [documentData, routeDocumentId]);
+
+  useEffect(() => {
+    reportedRepresentationFailuresRef.current.clear();
+  }, [documentData?.document_id]);
+
+  useEffect(() => {
+    if (!documentData?.metadata?.llm_representations) {
+      return;
+    }
+    reportRepresentationFailuresToConsole({
+      documentId: documentData.document_id,
+      provider: documentData.provider ?? documentData.metadata?.provider ?? 'opendataloader',
+      reportedFailures: reportedRepresentationFailuresRef.current,
+      status: documentData.metadata.llm_representations,
+    });
+  }, [
+    documentData?.document_id,
+    documentData?.provider,
+    documentData?.metadata?.llm_representations,
+  ]);
 
   useEffect(() => {
     const representationStatus = documentData?.metadata?.llm_representations;
@@ -53,13 +74,19 @@ export default function App() {
         const payload = await response.json();
         if (!response.ok || cancelled) {
           return;
-        }
-        if (payload.status !== 'failed') {
-          clearRepresentationErrorMessage(setErrorMessage);
-        }
-        setDocumentData((current) => mergeRepresentationSnapshot(current, payload));
-      } catch {
-        // Polling is best-effort; the reader remains usable without generated badges.
+      }
+      if (payload.status !== 'failed') {
+        clearRepresentationErrorMessage(setErrorMessage);
+      }
+      reportRepresentationFailuresToConsole({
+        documentId: documentData.document_id,
+        provider,
+        reportedFailures: reportedRepresentationFailuresRef.current,
+        status: payload,
+      });
+      setDocumentData((current) => mergeRepresentationSnapshot(current, payload));
+    } catch {
+      // Polling is best-effort; the reader remains usable without generated badges.
       }
     }
 
@@ -245,7 +272,7 @@ function buildLlmOptionsPayload(representationOptions = {}) {
     enabled,
     api_key: enabled ? representationOptions.apiKey?.trim() || null : null,
     model: representationOptions.model?.trim() || null,
-    keyword_min_words: toPositiveNumber(representationOptions.keywordMinWords, 4),
+    keyword_min_words: Math.max(toPositiveNumber(representationOptions.keywordMinWords, 20), 20),
     summary_min_words: toPositiveNumber(representationOptions.summaryMinWords, 35),
     summary_word_ratio: toPositiveNumber(representationOptions.summaryWordRatio, 0.15),
     max_keywords: toPositiveNumber(representationOptions.maxKeywords, 5),
@@ -346,8 +373,44 @@ function clearRepresentationErrorMessage(setErrorMessage) {
   ));
 }
 
+function reportRepresentationFailuresToConsole({ documentId, provider, reportedFailures, status }) {
+  if (!status?.enabled || toCount(status.failed_jobs) <= 0) {
+    return;
+  }
+
+  const errors = Array.isArray(status.errors) ? status.errors : [];
+  const signature = JSON.stringify({
+    documentId,
+    provider,
+    failed_jobs: status.failed_jobs,
+    errors: errors.map((item) => ({
+      block_id: item?.block_id,
+      kind: item?.kind,
+      error: item?.error,
+    })),
+  });
+  if (reportedFailures.has(signature)) {
+    return;
+  }
+
+  reportedFailures.add(signature);
+  console.error('LLM representation generation failed.', {
+    document_id: documentId,
+    provider,
+    status: status.status,
+    failed_jobs: toCount(status.failed_jobs),
+    total_jobs: toCount(status.total_jobs),
+    errors,
+  });
+}
+
 function isRepresentationGenerationError(message) {
   return String(message || '').toLowerCase().includes('representation generation failed');
+}
+
+function toCount(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function arraysEqual(first, second) {

@@ -73,6 +73,8 @@ export default function ReaderPage({
         </button>
       </header>
 
+      <RepresentationFailureBanner status={document.metadata?.llm_representations} />
+
       <PdfReaderCanvas
         document={document}
         representationSettings={representationSettings}
@@ -206,6 +208,19 @@ export default function ReaderPage({
       </div>
     </main>
   );
+}
+
+function RepresentationFailureBanner({ status }) {
+  if (!status?.enabled || toCount(status.failed_jobs) <= 0) {
+    return null;
+  }
+
+  const firstError = status.errors?.[0];
+  const message = firstError?.error
+    ? `LLM representation failed for ${firstError.block_id ?? 'a block'} ${firstError.kind ? `(${firstError.kind})` : ''}: ${firstError.error}`
+    : `LLM representations failed for ${toCount(status.failed_jobs)} of ${toCount(status.total_jobs)} jobs.`;
+
+  return <p className="error-banner reader-error-banner">{message}</p>;
 }
 
 function RepresentationStatusIcon({ status }) {

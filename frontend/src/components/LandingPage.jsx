@@ -7,7 +7,7 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
   const [llmEnabled, setLlmEnabled] = useState(true);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
-  const [keywordMinWords, setKeywordMinWords] = useState('4');
+  const [keywordMinWords, setKeywordMinWords] = useState('20');
   const [summaryMinWords, setSummaryMinWords] = useState('35');
   const [summaryWordRatio, setSummaryWordRatio] = useState('0.15');
   const [maxKeywords, setMaxKeywords] = useState('5');

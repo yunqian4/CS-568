@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -16,6 +17,7 @@ from . import llm as llm_module
 from .llm import LlmRepresentationConfig
 
 STATUS_NAME = "status.json"
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 @dataclass(slots=True)
@@ -86,7 +88,9 @@ def run_representation_jobs(
 
     api_key = config.api_key or (os.environ.get("OPENAI_API_KEY") or "").strip()
     if not api_key:
-        _mark_all_pending_failed(provider_dir, "LLM representation generation requires OPENAI_API_KEY.")
+        error = "LLM representation generation requires OPENAI_API_KEY."
+        LOGGER.warning(error)
+        _mark_all_pending_failed(provider_dir, error)
         return
 
     jobs_dir = _jobs_dir(provider_dir)
@@ -106,6 +110,12 @@ def run_representation_jobs(
                 job.update({"status": "complete", "updated_at": _now()})
             except Exception as error:  # pragma: no cover - defensive status capture
                 job.update({"status": "failed", "error": str(error), "updated_at": _now()})
+                LOGGER.warning(
+                    "LLM representation generation failed for block %s (%s): %s",
+                    block_id,
+                    kind,
+                    error,
+                )
             _write_status(jobs_dir, status)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:

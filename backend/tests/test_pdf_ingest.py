@@ -32,6 +32,7 @@ from core.ingest.opendataloader_pdf import ensure_java_on_path
 from core.ingest.contracts import ParsedPdfChunk, ParsedPdfDocument, ParsedPdfPage
 from core.ingest.llm_semantic import (
     LlmSemanticConfig,
+    _semantic_schema,
     _semantic_input,
     _semantic_instructions,
     apply_llm_semantic_grouping,
@@ -97,23 +98,25 @@ class PdfIngestTests(unittest.TestCase):
 
         self.assertEqual(document.page_count, 1)
         self.assertEqual(len(document.pages[0].chunks), 4)
-        self.assertEqual(len(document.blocks), 2)
+        self.assertEqual(len(document.blocks), 4)
         self.assertEqual(len(document.zoomable_document.children), 1)
         self.assertEqual(document.zoomable_document.children[0].title, "Body")
         self.assertEqual(
             [block.text for block in document.blocks],
             [
-                "Left column first block Left column second block",
-                "Right column first block Right column second block",
+                "Left column first block",
+                "Left column second block",
+                "Right column first block",
+                "Right column second block",
             ],
         )
         self.assertEqual(
             [block.section_path for block in document.blocks],
-            [["Body"], ["Body"]],
+            [["Body"], ["Body"], ["Body"], ["Body"]],
         )
         self.assertEqual(
             [len(block.chunk_ids) for block in document.blocks],
-            [2, 2],
+            [1, 1, 1, 1],
         )
 
     def test_grobid_body_filter_excludes_front_and_references(self) -> None:
@@ -328,6 +331,13 @@ class PdfIngestTests(unittest.TestCase):
         self.assertIn("starts lowercase", instructions)
         self.assertIn("Do not reorder chunks by bounding boxes", instructions)
 
+    def test_llm_semantic_schema_has_no_optional_strict_properties(self) -> None:
+        schema = _semantic_schema()
+        paragraph_schema = schema["properties"]["paragraphs"]["items"]
+
+        self.assertEqual(set(schema["properties"]), set(schema["required"]))
+        self.assertEqual(set(paragraph_schema["properties"]), set(paragraph_schema["required"]))
+
     def test_llm_semantic_grouping_rejects_unknown_chunk_ids(self) -> None:
         parsed_document = _build_opendataloader_parsed_document_for_llm()
         llm_output = {
@@ -517,6 +527,67 @@ class PdfIngestTests(unittest.TestCase):
             ["opendataloader-001-0002", "opendataloader-001-0003"],
         )
 
+    def test_llm_semantic_grouping_does_not_merge_new_sentence_groups(self) -> None:
+        parsed_document = ParsedPdfDocument(
+            title="Separate sentence paper",
+            pages=[
+                ParsedPdfPage(
+                    page_number=1,
+                    width=600,
+                    height=800,
+                    chunks=[
+                        ParsedPdfChunk(
+                            chunk_id="opendataloader-001-0001",
+                            page_number=1,
+                            text="The proposed method improves retrieval",
+                            x=0.1,
+                            y=0.2,
+                            width=0.8,
+                            height=0.04,
+                            semantic_type="paragraph",
+                        ),
+                        ParsedPdfChunk(
+                            chunk_id="opendataloader-001-0002",
+                            page_number=1,
+                            text="This evaluation reports a separate result.",
+                            x=0.1,
+                            y=0.25,
+                            width=0.8,
+                            height=0.04,
+                            semantic_type="paragraph",
+                        ),
+                    ],
+                )
+            ],
+            metadata={"parser": "opendataloader-pdf", "presegmented_chunks": True},
+        )
+        llm_output = {
+            "title": "Separate sentence paper",
+            "ignored_chunk_ids": [],
+            "paragraphs": [
+                {
+                    "paragraph_id": "p-1",
+                    "chunk_ids": ["opendataloader-001-0001"],
+                    "section_path": ["Body"],
+                    "role": "body",
+                },
+                {
+                    "paragraph_id": "p-2",
+                    "chunk_ids": ["opendataloader-001-0002"],
+                    "section_path": ["Body"],
+                    "role": "body",
+                },
+            ],
+        }
+
+        with patch("core.ingest.llm_semantic._call_semantic_llm", return_value=llm_output):
+            apply_llm_semantic_grouping(
+                parsed_document,
+                LlmSemanticConfig.from_values(enabled=True, api_key="test-key"),
+            )
+
+        self.assertEqual(len(parsed_document.metadata["llm_semantic_groups"]["paragraphs"]), 2)
+
     def test_store_and_parse_pdf_persists_hash_directory_artifacts(self) -> None:
         pdf_bytes = _build_semantic_pdf_bytes()
         expected_hash = hashlib.sha256(pdf_bytes).hexdigest()
@@ -575,7 +646,7 @@ class PdfIngestTests(unittest.TestCase):
         self.assertEqual(second_payload["metadata"]["cache_version"], backend_app.CACHE_VERSION)
 
     def test_llm_import_returns_without_placeholder_block_representations(self) -> None:
-        pdf_bytes = _build_semantic_pdf_bytes()
+        pdf_bytes = _build_long_semantic_pdf_bytes()
 
         with TemporaryDirectory() as temp_root:
             original_root = backend_app.TEMP_DOCUMENT_ROOT
@@ -598,10 +669,11 @@ class PdfIngestTests(unittest.TestCase):
 
         self.assertTrue(payload["metadata"]["llm_representations"]["enabled"])
         self.assertGreater(payload["metadata"]["llm_representations"]["total_jobs"], 0)
-        self.assertEqual([block["representations"] for block in payload["blocks"]], [[], []])
+        self.assertTrue(payload["blocks"])
+        self.assertTrue(all(block["representations"] == [] for block in payload["blocks"]))
 
     def test_cached_llm_import_retries_unfinished_representation_jobs(self) -> None:
-        pdf_bytes = _build_semantic_pdf_bytes()
+        pdf_bytes = _build_long_semantic_pdf_bytes()
         expected_hash = hashlib.sha256(pdf_bytes).hexdigest()
 
         def fake_call_openai_representation(*, api_key, config, task, kind):
@@ -710,7 +782,7 @@ class PdfIngestTests(unittest.TestCase):
             backend_app.TEMP_DOCUMENT_ROOT = Path(temp_root)
             try:
                 with (
-                    patch("backend.app.parse_pdf_provider_output", return_value=_build_opendataloader_parsed_document_for_llm()),
+                    patch("backend.app.parse_pdf_provider_output", return_value=_build_long_opendataloader_parsed_document_for_llm()),
                     patch("backend.core.ingest.llm_semantic._call_semantic_llm", return_value=semantic_output),
                     patch(
                         "backend.core.representations.llm._call_openai_representation",
@@ -880,9 +952,9 @@ class PdfIngestTests(unittest.TestCase):
                         width=420,
                         height=560,
                         chunks=[
-                            _chunk("chunk-001-0001", " ".join(f"alpha{i}" for i in range(12))),
-                            _chunk("chunk-001-0002", " ".join(f"beta{i}" for i in range(12))),
-                            _chunk("chunk-001-0003", " ".join(f"gamma{i}" for i in range(12))),
+                            _chunk("chunk-001-0001", " ".join(f"alpha{i}" for i in range(25))),
+                            _chunk("chunk-001-0002", " ".join(f"beta{i}" for i in range(25))),
+                            _chunk("chunk-001-0003", " ".join(f"gamma{i}" for i in range(25))),
                         ],
                     )
                 ],
@@ -1054,6 +1126,37 @@ class PdfIngestTests(unittest.TestCase):
         self.assertEqual(payload, {"output_text": "{}"})
         sleep.assert_called_once_with(0.0)
 
+    def test_openai_request_reports_response_error_body(self) -> None:
+        request = httpx.Request("POST", "https://api.openai.com/v1/responses")
+        response = httpx.Response(
+            400,
+            json={"error": {"message": "Invalid schema for response_format.", "type": "invalid_request_error"}},
+            request=request,
+        )
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def post(self, *args, **kwargs):
+                return response
+
+        config = LlmRepresentationConfig(enabled=True, api_key="test-key", request_retries=0)
+        with patch("core.representations.llm.httpx.Client", FakeClient):
+            with self.assertRaisesRegex(ValueError, "Invalid schema for response_format"):
+                _post_openai_response(
+                    api_key="test-key",
+                    config=config,
+                    operation="OpenAI test request",
+                    body={"model": "test-model", "input": "test"},
+                )
+
     def test_representation_output_token_budget_allows_reasoning_models(self) -> None:
         self.assertGreaterEqual(
             _estimate_max_output_tokens(
@@ -1145,7 +1248,7 @@ class PdfIngestTests(unittest.TestCase):
                         page_number=1,
                         width=420,
                         height=560,
-                        chunks=[_chunk("chunk-001-0001", " ".join(f"semantic{i}" for i in range(20)))],
+                        chunks=[_chunk("chunk-001-0001", " ".join(f"semantic{i}" for i in range(25)))],
                     )
                 ],
             ),
@@ -1177,6 +1280,33 @@ class PdfIngestTests(unittest.TestCase):
         self.assertEqual(representation.value, "Custom generated takeaway.")
         self.assertEqual(representation.background_color, "#ffeeaa")
         self.assertEqual(representation.background_opacity, 0.35)
+
+    def test_llm_representations_skip_twenty_word_paragraphs(self) -> None:
+        document = build_pdf_document_from_parsed_pdf(
+            document_id="doc-short-rep",
+            source_name="short.pdf",
+            provider="native",
+            parsed_document=ParsedPdfDocument(
+                title="short.pdf",
+                metadata={"presegmented_chunks": True},
+                pages=[
+                    ParsedPdfPage(
+                        page_number=1,
+                        width=420,
+                        height=560,
+                        chunks=[_chunk("chunk-001-0001", " ".join(f"word{i}" for i in range(20)))],
+                    )
+                ],
+            ),
+        )
+        config = LlmRepresentationConfig.from_values(enabled=True, api_key="test-key", keyword_min_words=1)
+
+        with patch("core.representations.llm._call_openai_representation") as call_openai:
+            metadata = enrich_document_representations(document, config)
+
+        call_openai.assert_not_called()
+        self.assertEqual(metadata["eligible_blocks"], 0)
+        self.assertEqual(document.blocks[0].representations, [])
 
     def test_llm_representations_require_user_or_default_key(self) -> None:
         document = build_pdf_document_from_parsed_pdf(
@@ -1225,6 +1355,33 @@ def _build_semantic_pdf_bytes() -> bytes:
         page.insert_textbox(
             fitz.Rect(28, 326, 380, 354),
             "Background paragraph text stays in this subsection.",
+            fontsize=12,
+        )
+        return document.tobytes()
+    finally:
+        document.close()
+
+
+def _build_long_semantic_pdf_bytes() -> bytes:
+    document = fitz.open()
+    try:
+        page = document.new_page(width=420, height=560)
+        page.insert_textbox(fitz.Rect(70, 20, 360, 56), "Paper Title", fontsize=20)
+        page.insert_textbox(fitz.Rect(28, 92, 220, 120), "1 Introduction", fontsize=16)
+        page.insert_textbox(
+            fitz.Rect(28, 150, 390, 190),
+            "This introduction paragraph describes semantic parsing behavior for a zoomable reader prototype",
+            fontsize=12,
+        )
+        page.insert_textbox(
+            fitz.Rect(28, 198, 390, 238),
+            "and continues with enough words to trigger representation jobs during tests.",
+            fontsize=12,
+        )
+        page.insert_textbox(fitz.Rect(28, 270, 240, 296), "1.1 Background", fontsize=14)
+        page.insert_textbox(
+            fitz.Rect(28, 326, 390, 378),
+            "The background paragraph adds more than twenty words so cached representation job tests exercise generation instead of the short paragraph skip rule.",
             fontsize=12,
         )
         return document.tobytes()
@@ -1391,6 +1548,17 @@ def _build_opendataloader_parsed_document_for_llm() -> ParsedPdfDocument:
             "semantic_source": "opendataloader-json",
         },
     )
+
+
+def _build_long_opendataloader_parsed_document_for_llm() -> ParsedPdfDocument:
+    parsed_document = _build_opendataloader_parsed_document_for_llm()
+    parsed_document.pages[0].chunks[2].text = (
+        "First paragraph part one explains a cached semantic grouping workflow with enough detail"
+    )
+    parsed_document.pages[0].chunks[3].text = (
+        "and continues the same sentence so representation jobs remain eligible after prompt changes."
+    )
+    return parsed_document
 
 
 def _build_single_chunk_parsed_document() -> ParsedPdfDocument:

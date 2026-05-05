@@ -18,7 +18,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - The backend constructs a semantic zoomable document tree from parser output.
 - The zoomable document is a tree of sections, subsections, and paragraph leaves.
 - Each paragraph leaf in the zoomable document represents one semantic paragraph and may map to one or more text chunks.
-- The native parser should identify raw text blocks and merge consecutive text blocks into one logical block when they belong to the same reading flow.
+- The native parser should identify raw text blocks and merge consecutive text blocks into one logical block only when they appear to split one sentence across chunks.
 - The native semantic parser should infer title, section headings, subsection headings, and paragraph leaves from layout and typography heuristics.
 - The GROBID parser should use GROBID TEI body content to ignore paper front matter and references, then align retained body content back to PyMuPDF chunks for precise overlays.
 - GROBID should be integrated behind the backend provider boundary with backend health checks and optional local Docker startup.
@@ -33,7 +33,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Default representation backgrounds are dark and fully opaque.
 - Users can edit default keyword and summary prompts, add custom representation prompts, choose background colors and opacity, and submit prompt changes to restart representation generation for the current cached PDF.
 - Prompt, color, and opacity settings are browser-session scoped by default, with explicit cookie save/load/clear controls.
-- LLM keywords are generated above a configurable short-block threshold, defaulting to `4` words.
+- LLM keywords are generated above a configurable short-block threshold, defaulting to `20` words; blocks with 20 or fewer words are too short for generated representations.
 - LLM summaries are generated above a configurable long-block threshold, defaulting to `35` words, and target a configurable word-count ratio, defaulting to `0.15`.
 - Users may provide a request-scoped OpenAI API key or rely on the backend default `OPENAI_API_KEY`.
 - If the default OpenDataLoader LLM pipeline has no server key, the frontend requires a request key before import.
@@ -55,7 +55,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Treat zoomable document construction as a separate step from raw PDF parsing.
 - Preserve the ability for one paragraph block to reference multiple source text chunks.
 - Raw parser providers now return chunk geometry through a shared provider contract before document construction.
-- Consecutive native text blocks are now merged into one paragraph block with column-aware ordering heuristics.
+- Consecutive native text blocks are now merged into one paragraph block only when column-aware geometry and sentence-continuation evidence both support the merge.
 - Semantic parsing now classifies layout units into section headings, subsection headings, and paragraph leaves.
 - The zoomable document tree now uses semantic hierarchy instead of page nodes.
 - The GROBID provider now uses a backend service wrapper, calls GROBID REST internally, extracts TEI body headings and paragraphs, excludes front/back matter, and filters PyMuPDF chunks to aligned body content.
@@ -80,8 +80,8 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - OpenDataLoader LLM semantic parsing stores normalized chunk input at `providers/opendataloader/llm/semantic-input.json` and validated semantic output at `providers/opendataloader/llm/semantic.json`.
 - LLM semantic grouping is allowed to group existing chunks, set section paths, assign roles, and mark ignored chunks; geometry remains sourced from parser chunks.
 - OpenDataLoader LLM semantic input preserves provider chunk reading order, records a `reading_order` index, and validates paragraph output in that order rather than using bounding-box sorting.
-- LLM semantic grouping is instructed not to split a single sentence across paragraphs, and backend postprocessing merges adjacent same-section groups when the sentence boundary was split.
-- LLM semantic grouping now instructs the model to check sentence completeness before ending a paragraph and to merge adjacent continuation chunks into one paragraph group.
+- LLM semantic grouping is instructed not to split a single sentence across paragraphs, and backend postprocessing merges adjacent same-section groups only when the sentence boundary was split.
+- LLM semantic grouping now instructs the model to check sentence completeness before ending a paragraph and to merge adjacent continuation chunks into one paragraph group without joining separate sentences.
 - Public LLM paragraph block IDs use stable `paragraph-000x` labels, while source chunk IDs remain visible separately in development overlays.
 - LLM semantic grouping now sends bounded chunk windows rather than one whole-document prompt, and recursively splits any window that returns an incomplete `max_output_tokens` response.
 - Per-window semantic inputs and outputs are cached under `providers/opendataloader/llm/semantic-windows/`.
@@ -100,6 +100,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - The frontend polls `GET /api/documents/{document_id}/representations?provider=<provider>` and merges completed representation results into reader state.
 - Representation polling should not reload the PDF file, reset visible pages, or rebuild canvas state when the poll response has no new data.
 - The reader shows a bottom-right LLM representation status chip for pending, complete, failed, and no-eligible-block cases.
+- The frontend displays failed LLM representation jobs in the reader and reports them to the browser console with available block, representation kind, and backend error details.
 - The reader header no longer shows provider/pipeline metadata, and a lower-right settings control toggles keyword and summary visibility.
 - The lower-right settings panel also edits representation prompts, colors, opacity, visibility, custom definitions, cookie persistence, and regeneration credentials.
 - The lower-right settings panel includes a paragraph ID toggle for development block/chunk labels, defaulting to hidden.
@@ -108,6 +109,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Frontend keyword display now gives each keyword its own rounded chip background instead of one combined keyword badge.
 - Frontend overlay typography now scales per overlay from the source region size and the currently visible summary/keyword set.
 - Frontend overlays suppress placeholder chunk keyword fallbacks while LLM representations are enabled.
+- Wide PDF pages now use one shared horizontal scroll context on the page stack instead of independent page-level horizontal scrollbars.
 - Zoomable document construction now builds:
   - page-level chunk lists
   - semantic paragraph leaf blocks with representation sets
@@ -169,10 +171,11 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - OpenDataLoader LLM semantic paragraph order follows provider chunk reading order, including for two-column papers.
 - OpenDataLoader LLM semantic input and output are cached in the provider temp folder.
 - OpenDataLoader LLM semantic grouping can complete long documents through chunk-window retries when a single LLM response would exceed output limits.
-- Leaf paragraph blocks above the configured keyword threshold receive generated keywords when LLM generation is enabled.
+- Leaf paragraph blocks above the configured keyword threshold receive generated keywords when LLM generation is enabled; blocks with 20 or fewer words receive no generated representations.
 - Leaf paragraph blocks above the configured summary threshold receive generated summaries sized from the configured word-count ratio.
 - Keyword and summary representations can arrive after the reader opens and are merged into overlays by polling.
 - Placeholder keyword chips are not shown in LLM mode while representation jobs are pending or failed.
+- Failed LLM representation jobs are visible in the reader and reported in the browser console with available backend error details.
 - Readers can toggle keyword and summary visibility without changing the underlying parsed document.
 - Readers can edit representation prompt definitions, colors, and opacity in the current session.
 - Readers can show or hide development paragraph/chunk ID labels from the reader settings panel.
@@ -189,7 +192,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Multi-chunk paragraph blocks display each keyword or summary representation once on a predicted-fit source region, while all source chunk frames remain visible.
 - Development overlays include a `block-label` representation on every text chunk with the owning block ID and chunk ID.
 - Chunks in the same block are treated as one paragraph that shares block representations, and each non-development representation is placed in at most one chunk overlay.
-- Semantic paragraphs should not split one sentence across two zoomable blocks.
+- Semantic paragraphs should not split one sentence across two zoomable blocks, but separate sentences should not be merged just because they are adjacent.
 - Each block can expose multiple representations such as keywords and summaries.
 - A block may drive multiple overlays.
 - Overlay-display rules are modular and can be replaced without changing the block data model.

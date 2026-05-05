@@ -11,6 +11,8 @@ from ..representations import build_default_block_representations
 from .contracts import ParsedPdfChunk, ParsedPdfDocument
 
 NUMBERED_HEADING_RE = re.compile(r"^(?P<prefix>\d+(?:\.\d+)*|[IVXLC]+|[A-Z])[.)]?\s+\S")
+SENTENCE_END_RE = re.compile(r"""[.!?]["')\]]*$""")
+CONTINUATION_START_RE = re.compile(r"""^[a-z,;:)\]\-]""")
 
 
 @dataclass(slots=True)
@@ -416,6 +418,9 @@ def _should_merge_chunk(
 
     previous_box = _chunk_group_box(previous_group)
     current_box = _chunk_box(current_chunk)
+    if not _looks_like_sentence_continuation(previous_group, current_chunk):
+        return False
+
     vertical_gap = max(current_box["top"] - previous_box["bottom"], 0.0)
     left_delta = abs(current_box["x0"] - previous_box["x0"])
     center_delta = abs(_box_center_x(current_box) - _box_center_x(previous_box))
@@ -432,6 +437,18 @@ def _should_merge_chunk(
             or center_delta <= 0.06
         )
     )
+
+
+def _looks_like_sentence_continuation(previous_group: list[ParsedPdfChunk], current_chunk: ParsedPdfChunk) -> bool:
+    previous_text = " ".join(chunk.text.strip() for chunk in previous_group if chunk.text.strip())
+    current_text = current_chunk.text.strip()
+    if not previous_text or not current_text:
+        return False
+    if previous_text.rstrip().endswith("-"):
+        return True
+    if SENTENCE_END_RE.search(previous_text):
+        return False
+    return bool(CONTINUATION_START_RE.search(current_text.lstrip()))
 
 
 def _looks_like_heading_chunk(chunk: ParsedPdfChunk, body_font_size: float) -> bool:

@@ -132,7 +132,7 @@ Linting:
 - The zoomable document should be a tree of sections, subsections, and paragraph leaves.
 - Each paragraph leaf block should represent one semantic paragraph and may map to one or more text chunks.
 - The native parser should favor block-wise extraction that works for academic papers and two-column layouts.
-- Consecutive text blocks in the same reading flow should be concatenated into one logical paragraph block when geometry supports that merge.
+- Consecutive text blocks in the same reading flow should be concatenated into one logical paragraph block only when they appear to split one sentence across chunks.
 - The native semantic parser should infer document title, section headings, subsection headings, and paragraph leaves from layout and typography heuristics.
 - Paragraph-level chunking is sufficient; line-level granularity is not required unless a parser needs line data internally.
 - Keep the native parser path available.
@@ -146,8 +146,8 @@ Linting:
 - The default reader pipeline should use OpenDataLoader chunks plus LLM semantic grouping when credentials are available.
 - LLM semantic grouping may group chunks, assign section paths, mark ignored chunks, and assign roles, but it must not create geometry or unknown chunk IDs.
 - OpenDataLoader LLM semantic grouping must preserve the provider chunk reading order and must not re-sort chunks by bounding-box coordinates before grouping.
-- LLM semantic grouping should keep chunks from the same sentence in one paragraph group; deterministic postprocessing may merge adjacent same-section groups when a sentence was split.
-- LLM semantic grouping should explicitly check paragraph sentence completeness before ending a paragraph, so adjacent continuation chunks are grouped into the same paragraph block.
+- LLM semantic grouping should keep chunks from the same sentence in one paragraph group; deterministic postprocessing may merge adjacent same-section groups only when a sentence was split across chunks.
+- LLM semantic grouping should explicitly check paragraph sentence completeness before ending a paragraph, so adjacent continuation chunks are grouped into the same paragraph block without merging separate sentences.
 - Public LLM paragraph block IDs should use stable `paragraph-000x` labels instead of embedding provider chunk IDs or free-form LLM paragraph IDs.
 - Store OpenDataLoader LLM semantic inputs and outputs under `providers/opendataloader/llm/semantic-input.json` and `providers/opendataloader/llm/semantic.json`.
 - Split OpenDataLoader semantic grouping into bounded chunk windows, and recursively split a window if OpenAI returns an incomplete `max_output_tokens` response.
@@ -157,7 +157,7 @@ Linting:
 - Support user-customizable prompt definitions for LLM-backed block representations.
 - Keywords should be generated only when a leaf block has at least the configured minimum word count.
 - Summaries should be generated only when a leaf block has at least the configured summary minimum word count.
-- Default LLM representation thresholds are `4` words for keywords and `35` words for summaries.
+- Default LLM representation thresholds are `20` words for keywords and `35` words for summaries; the backend does not generate any representation for blocks with 20 or fewer words.
 - Summary target length should scale from the block word count using the configured ratio, defaulting to about `0.15`.
 - Generate paragraph representations progressively after import, cache each block/kind result under `providers/<provider>/llm/representations/<block_id>/<kind>.json`, and expose polling status through the backend.
 - When LLM representations are enabled, do not return heuristic placeholder block representations while jobs are pending.
@@ -172,6 +172,7 @@ Linting:
 
 - Render the PDF in a web reader.
 - The reader should support normal PDF zoom in/out controls, with canvas, text layer, and overlays scaling together.
+- Wide PDF pages should share one horizontal scroll context instead of each page having its own horizontal scrollbar.
 - Overlay visible PDF regions with modular overlay containers.
 - Each overlay container may present one or more block representations such as keywords, summaries, or similar derived views.
 - Each block should own a set of representations, but a block may map to multiple overlays.
@@ -181,6 +182,7 @@ Linting:
 - Poll backend representation status after the reader opens and merge completed keyword/summary results into the displayed document.
 - Representation polling must update overlays without reloading the PDF document or resetting visible-page state.
 - Reader UI should expose LLM representation progress/status so pending, complete, failed, and no-eligible-block cases are visible.
+- LLM representation failures should be visible in the reader and reported to the browser and backend consoles with available backend error details.
 - The reader should provide controls for toggling representation visibility, including keywords and summaries.
 - The reader settings should allow users to add prompt definitions, edit default prompts, edit colors and opacity, submit edited prompts for regeneration, reset defaults, and optionally save/load/clear cookie-backed settings.
 - The reader settings should include a toggle for showing or hiding development paragraph/chunk ID labels.

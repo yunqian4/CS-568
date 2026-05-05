@@ -345,6 +345,11 @@ select {
   color: #7a2418;
 }
 
+.reader-error-banner {
+  border: 1px solid rgba(164, 40, 23, 0.18);
+  background: rgba(255, 251, 245, 0.94);
+}
+
 .reader-shell {
   display: grid;
   gap: 22px;
@@ -361,6 +366,8 @@ select {
 .pdf-stack {
   display: grid;
   gap: 22px;
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
 
 .pdf-zoom-toolbar {
@@ -393,8 +400,11 @@ select {
 }
 
 .pdf-page-card {
+  width: max-content;
+  max-width: none;
+  margin-inline: auto;
   padding: 20px;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .pdf-page-meta {

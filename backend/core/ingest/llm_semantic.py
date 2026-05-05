@@ -317,7 +317,6 @@ def _semantic_schema() -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "paragraph_id": {"type": "string"},
-                        "source_paragraph_id": {"type": "string"},
                         "chunk_ids": {"type": "array", "items": {"type": "string"}},
                         "section_path": {"type": "array", "items": {"type": "string"}},
                         "role": {"type": "string"},
@@ -415,8 +414,8 @@ def _should_merge_sentence_continuation(
 
     if previous_text.rstrip().endswith("-"):
         return True
-    if not SENTENCE_END_RE.search(previous_text):
-        return True
+    if SENTENCE_END_RE.search(previous_text):
+        return False
     return bool(CONTINUATION_START_RE.search(current_text.lstrip()))
 
 

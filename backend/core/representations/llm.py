@@ -25,6 +25,7 @@ DEFAULT_SUMMARY_PROMPT = (
     "Write one concise summary of the paragraph's main claim or finding. "
     "Use only the supplied paragraph text."
 )
+MIN_REPRESENTATION_WORDS = 20
 DEFAULT_KEYWORDS_BACKGROUND = "#7a4a12"
 DEFAULT_SUMMARY_BACKGROUND = "#263238"
 DEFAULT_BACKGROUND_OPACITY = 1.0
@@ -95,7 +96,7 @@ class LlmRepresentationConfig:
     enabled: bool = False
     api_key: str | None = None
     model: str = DEFAULT_MODEL
-    keyword_min_words: int = 4
+    keyword_min_words: int = MIN_REPRESENTATION_WORDS
     summary_min_words: int = 35
     summary_word_ratio: float = 0.15
     max_keywords: int = 5
@@ -125,7 +126,7 @@ class LlmRepresentationConfig:
             enabled=bool(enabled),
             api_key=api_key.strip() if api_key and api_key.strip() else None,
             model=(model or os.environ.get("OPENAI_REPRESENTATION_MODEL") or DEFAULT_MODEL).strip(),
-            keyword_min_words=_positive_int(keyword_min_words, 4),
+            keyword_min_words=max(_positive_int(keyword_min_words, MIN_REPRESENTATION_WORDS), MIN_REPRESENTATION_WORDS),
             summary_min_words=_positive_int(summary_min_words, 35),
             summary_word_ratio=_bounded_float(summary_word_ratio, 0.15, minimum=0.02, maximum=0.80),
             max_keywords=_positive_int(max_keywords, 5),
@@ -195,7 +196,8 @@ def _build_block_task(block, config: LlmRepresentationConfig) -> dict[str, Any]:
     definitions = {definition.name: definition for definition in _enabled_definitions(config)}
     for definition in definitions.values():
         threshold = config.keyword_min_words if _is_keyword_definition(definition.name) else config.summary_min_words
-        if word_count >= threshold:
+        threshold = max(threshold, MIN_REPRESENTATION_WORDS)
+        if word_count > threshold:
             tasks.append(definition.name)
 
     return {
@@ -414,7 +416,7 @@ def _post_openai_response(
             if _should_retry_http_error(error) and attempt < attempts - 1:
                 _sleep_before_retry(attempt=attempt, response=response)
                 continue
-            raise ValueError(f"{operation} failed: {error}") from error
+            raise ValueError(f"{operation} failed: {_openai_http_error_message(error)}") from error
 
     raise ValueError(f"{operation} failed.")
 
@@ -422,6 +424,28 @@ def _post_openai_response(
 def _should_retry_http_error(error: httpx.HTTPError) -> bool:
     response = getattr(error, "response", None)
     return bool(response is not None and response.status_code in RETRYABLE_OPENAI_STATUS_CODES)
+
+
+def _openai_http_error_message(error: httpx.HTTPError) -> str:
+    response = getattr(error, "response", None)
+    if response is None:
+        return str(error)
+
+    detail = _response_error_detail(response)
+    if not detail:
+        return str(error)
+    return f"{error}; response={detail}"
+
+
+def _response_error_detail(response: httpx.Response) -> str:
+    content_type = response.headers.get("content-type", "")
+    try:
+        if "json" in content_type.lower():
+            return _compact_json(response.json())
+        text = response.text
+    except Exception:
+        return ""
+    return " ".join(text.split())[:600]
 
 
 def _sleep_before_retry(*, attempt: int, response: httpx.Response | None) -> None:
