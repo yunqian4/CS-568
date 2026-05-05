@@ -20,6 +20,8 @@ export default function ReaderPage({
   onReset,
   onResetRepresentationSettings,
   onSaveRepresentationCookie,
+  quizMode = false,
+  quizPanel = null,
   representationSettings,
   settingsMessage,
 }) {
@@ -75,13 +77,18 @@ export default function ReaderPage({
 
       <RepresentationFailureBanner status={document.metadata?.llm_representations} />
 
-      <PdfReaderCanvas
-        document={document}
-        representationSettings={representationSettings}
-        visibleRepresentations={visibleRepresentations}
-      />
+      <div className="reader-body">
+        <div className="reader-pdf-wrapper">
+          <PdfReaderCanvas
+            document={document}
+            representationSettings={representationSettings}
+            visibleRepresentations={visibleRepresentations}
+          />
+        </div>
+        {quizPanel}
+      </div>
 
-      <div className="reader-settings">
+      {quizMode ? null : <div className="reader-settings">
         <RepresentationStatusIcon status={document.metadata?.llm_representations} />
         {isSettingsOpen ? (
           <div className="reader-settings-panel">
@@ -205,7 +212,7 @@ export default function ReaderPage({
         >
           Settings
         </button>
-      </div>
+      </div>}
     </main>
   );
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LandingPage from './components/LandingPage';
+import QuizPanel from './components/QuizPanel';
 import ReaderPage from './components/ReaderPage';
+import ResultsPage from './components/ResultsPage';
 import {
   clearCookieRepresentationSettings,
   readCookieRepresentationSettings,
@@ -22,6 +24,13 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState('');
   const [representationSettings, setRepresentationSettings] = useState(readSessionRepresentationSettings);
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [quizMode, setQuizMode] = useState(false);
+  const [quizRepresentation, setQuizRepresentation] = useState(null);
+  const [quizStartTime, setQuizStartTime] = useState(null);
+  const [quizApiKey, setQuizApiKey] = useState('');
+  const [quizResults, setQuizResults] = useState(null);
+  const [quizQuestions, setQuizQuestions] = useState(null);
+  const [quizFetchError, setQuizFetchError] = useState('');
   const routeDocumentId = useMemo(getRouteDocumentId, [window.location.pathname]);
   const reportedRepresentationFailuresRef = useRef(new Set());
 
@@ -108,22 +117,47 @@ export default function App() {
     body.append('file', file);
     appendRepresentationFormFields(body, representationOptions);
     body.append('representations', JSON.stringify(toRepresentationDefinitions(representationSettings)));
-    await submitDocument(`/api/documents/upload?provider=${encodeURIComponent(provider)}`, { body, method: 'POST' });
+    await submitDocument(
+      `/api/documents/upload?provider=${encodeURIComponent(provider)}`,
+      { body, method: 'POST' },
+      { quizMode: Boolean(representationOptions.quizMode), apiKey: representationOptions.apiKey },
+    );
   }
 
   async function handleUrlSubmit(url, provider, representationOptions) {
-    await submitDocument('/api/documents/from-url', {
-      body: JSON.stringify({
-        provider,
-        url,
-        llm_options: {
-          ...buildLlmOptionsPayload(representationOptions),
-          representations: toRepresentationDefinitions(representationSettings),
-        },
-      }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
+    await submitDocument(
+      '/api/documents/from-url',
+      {
+        body: JSON.stringify({
+          provider,
+          url,
+          llm_options: {
+            ...buildLlmOptionsPayload(representationOptions),
+            representations: toRepresentationDefinitions(representationSettings),
+          },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      },
+      { quizMode: Boolean(representationOptions.quizMode), apiKey: representationOptions.apiKey },
+    );
+  }
+
+  function handleQuizSubmit({ score, totalQuestions, timeSeconds }) {
+    setQuizResults({ score, totalQuestions, timeSeconds });
+  }
+
+  function handleQuizReset() {
+    setDocumentData(null);
+    setQuizMode(false);
+    setQuizRepresentation(null);
+    setQuizStartTime(null);
+    setQuizApiKey('');
+    setQuizResults(null);
+    setQuizQuestions(null);
+    setQuizFetchError('');
+    setErrorMessage('');
+    window.history.pushState({}, '', '/');
   }
 
   function handleRepresentationSettingsChange(nextSettings) {
@@ -192,7 +226,7 @@ export default function App() {
     }
   }
 
-  async function submitDocument(endpoint, requestInit) {
+  async function submitDocument(endpoint, requestInit, options = {}) {
     setIsSubmitting(true);
     setErrorMessage('');
 
@@ -203,8 +237,47 @@ export default function App() {
         throw new Error(payload.detail ?? 'Unable to import PDF.');
       }
 
-      setDocumentData(payload);
-      window.history.pushState({}, '', `/reader/${payload.document_id}`);
+      if (options.quizMode) {
+        const rep = ['keywords', 'summary'][Math.floor(Math.random() * 2)];
+        const provider = payload.provider ?? payload.metadata?.provider ?? 'opendataloader';
+
+        let questions = [];
+        let fetchError = '';
+        try {
+          const qResp = await fetch(`/api/documents/${payload.document_id}/quiz`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider, api_key: options.apiKey || null }),
+          });
+          const qData = await qResp.json();
+          if (qResp.ok) {
+            questions = qData.questions ?? [];
+          } else {
+            fetchError = qData.detail || 'Failed to generate quiz questions.';
+          }
+        } catch {
+          fetchError = 'Failed to connect to quiz service.';
+        }
+
+        setQuizMode(true);
+        setQuizRepresentation(rep);
+        setQuizApiKey(options.apiKey || '');
+        setQuizResults(null);
+        setQuizQuestions(questions);
+        setQuizFetchError(fetchError);
+        setQuizStartTime(Date.now());
+        setDocumentData(payload);
+        window.history.pushState({}, '', `/reader/${payload.document_id}`);
+      } else {
+        setQuizMode(false);
+        setQuizRepresentation(null);
+        setQuizStartTime(null);
+        setQuizApiKey('');
+        setQuizQuestions(null);
+        setQuizFetchError('');
+        setDocumentData(payload);
+        window.history.pushState({}, '', `/reader/${payload.document_id}`);
+      }
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -225,19 +298,56 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  const activeRepresentationSettings = quizMode && quizRepresentation
+    ? representationSettings.map((s) => ({ ...s, enabled: s.id === quizRepresentation }))
+    : representationSettings;
+
+  if (quizResults && documentData) {
+    return (
+      <ResultsPage
+        articleName={documentData.title || documentData.source_name || 'Unknown article'}
+        onReset={handleQuizReset}
+        representationName={quizRepresentation || 'none'}
+        score={quizResults.score}
+        timeSeconds={quizResults.timeSeconds}
+        totalQuestions={quizResults.totalQuestions}
+      />
+    );
+  }
+
+  const quizPanelElement = quizMode && documentData && quizStartTime ? (
+    <QuizPanel
+      fetchError={quizFetchError}
+      onSubmit={handleQuizSubmit}
+      questions={quizQuestions}
+      startTime={quizStartTime}
+    />
+  ) : null;
+
   return documentData ? (
-    <ReaderPage document={documentData} onReset={() => {
-      setDocumentData(null);
-      setErrorMessage('');
-      window.history.pushState({}, '', '/');
-    }}
+    <ReaderPage
+      document={documentData}
+      onReset={() => {
+        setDocumentData(null);
+        setQuizMode(false);
+        setQuizRepresentation(null);
+        setQuizStartTime(null);
+        setQuizApiKey('');
+        setQuizResults(null);
+        setQuizQuestions(null);
+        setQuizFetchError('');
+        setErrorMessage('');
+        window.history.pushState({}, '', '/');
+      }}
       onClearRepresentationCookie={handleClearRepresentationCookie}
       onLoadRepresentationCookie={handleLoadRepresentationCookie}
       onRegenerateRepresentations={handleRegenerateRepresentations}
       onRepresentationSettingsChange={handleRepresentationSettingsChange}
       onResetRepresentationSettings={handleResetRepresentationSettings}
       onSaveRepresentationCookie={handleSaveRepresentationCookie}
-      representationSettings={representationSettings}
+      quizMode={quizMode}
+      quizPanel={quizPanelElement}
+      representationSettings={activeRepresentationSettings}
       settingsMessage={settingsMessage}
     />
   ) : (

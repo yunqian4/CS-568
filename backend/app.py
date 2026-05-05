@@ -30,7 +30,7 @@ from .core.ingest.builders import build_pdf_document_from_parsed_pdf
 from .core.ingest.llm_semantic import LlmSemanticConfig, apply_llm_semantic_grouping
 from .core.models import PdfBlock, PdfDocument
 from .core.representations import LlmRepresentationConfig, build_default_block_representations
-from .core.representations.llm import RepresentationDefinition
+from .core.representations.llm import RepresentationDefinition, OPENAI_RESPONSES_URL, DEFAULT_MODEL, _extract_output_text
 from .core.representations.jobs import (
     initialize_representation_jobs,
     merge_completed_representations,
@@ -153,6 +153,14 @@ class RegenerateRepresentationsRequest(BaseModel):
     llm_options: LlmOptionsRequest | None = None
 
 
+class QuizRequest(BaseModel):
+    """Request payload for generating quiz questions from a document."""
+
+    provider: str = "opendataloader"
+    api_key: str | None = None
+    model: str | None = None
+
+
 @app.get("/api/health")
 def healthcheck() -> dict[str, str]:
     """Simple probe used by the frontend during development."""
@@ -168,6 +176,38 @@ def get_llm_config() -> dict[str, object]:
         "has_default_key": bool((os.environ.get("OPENAI_API_KEY") or "").strip()),
         "default_model": LlmRepresentationConfig.from_values().model,
     }
+
+
+@app.post("/api/documents/{document_id}/quiz")
+async def generate_quiz(document_id: str, payload: QuizRequest) -> dict[str, object]:
+    """Generate 3 SAT-style multiple-choice questions from a document's text blocks."""
+
+    document_dir = _document_dir_for_id(document_id)
+    provider = _safe_artifact_name(payload.provider)
+    document_json_path = document_dir / "providers" / provider / DOCUMENT_JSON_NAME
+
+    if not document_json_path.exists():
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    doc_data = _read_json(document_json_path)
+    blocks = doc_data.get("blocks") if isinstance(doc_data.get("blocks"), list) else []
+    full_text = "\n\n".join(str(b.get("text") or "") for b in blocks if isinstance(b, dict) and b.get("text"))
+
+    if not full_text.strip():
+        raise HTTPException(status_code=400, detail="No extractable text found in this document.")
+
+    api_key = (payload.api_key or "").strip() or (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="No API key available for quiz generation.")
+
+    model = (payload.model or "").strip() or (os.environ.get("OPENAI_REPRESENTATION_MODEL") or DEFAULT_MODEL)
+
+    try:
+        questions = _generate_quiz_questions(text=full_text, api_key=api_key, model=model)
+    except ValueError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return {"questions": questions}
 
 
 @app.post("/api/documents/upload")
@@ -818,6 +858,105 @@ def _provider_status_from_payload(payload: dict[str, object], *, cache_profile: 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _generate_quiz_questions(text: str, api_key: str, model: str) -> list[dict[str, object]]:
+    """Call OpenAI to generate 3 SAT-style multiple-choice questions from document text."""
+
+    truncated = text[:6000]
+    timeout = float(os.environ.get("OPENAI_REQUEST_TIMEOUT_SECONDS") or 90)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    base_body: dict[str, object] = {
+        "model": model,
+        "instructions": (
+            "You are a quiz generator for a reading comprehension research study. "
+            "Given the article text, generate exactly 3 multiple-choice questions that test "
+            "understanding of key facts, findings, or claims stated in the text. "
+            "Each question must have exactly 5 answer choices. Exactly one choice is correct. "
+            "Be CONCISE: keep each question under 20 words and each choice under 12 words. "
+            "Make wrong choices plausible but clearly contradicted by the text. "
+            "answer_index is the 0-based index of the correct choice. "
+            "Return JSON matching the provided schema exactly."
+        ),
+        "input": truncated,
+        "max_output_tokens": 16384,
+        "store": False,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "quiz_questions",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "questions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "text": {"type": "string"},
+                                    "choices": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                    "answer_index": {"type": "integer"},
+                                },
+                                "required": ["text", "choices", "answer_index"],
+                                "additionalProperties": False,
+                            },
+                        }
+                    },
+                    "required": ["questions"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+    }
+
+    # For reasoning models the reasoning tokens count against max_output_tokens.
+    # Request low effort to minimise that overhead. Non-reasoning models may
+    # reject the field with 400; we retry without it in that case.
+    body_with_reasoning = {**base_body, "reasoning": {"effort": "low"}}
+
+    output_text = _quiz_call_with_fallback(
+        body_primary=body_with_reasoning,
+        body_fallback=base_body,
+        headers=headers,
+        timeout=timeout,
+    )
+
+    try:
+        parsed = json.loads(output_text)
+    except json.JSONDecodeError as error:
+        raise ValueError("Quiz generation returned invalid JSON.") from error
+
+    return (parsed.get("questions") or [])[:3]
+
+
+def _quiz_call_with_fallback(
+    *,
+    body_primary: dict[str, object],
+    body_fallback: dict[str, object],
+    headers: dict[str, str],
+    timeout: float,
+) -> str:
+    """POST to the OpenAI Responses API; on 400 retry without unsupported fields."""
+
+    with httpx.Client(timeout=timeout) as client:
+        try:
+            response = client.post(OPENAI_RESPONSES_URL, headers=headers, json=body_primary)
+            if response.status_code == 400:
+                response = client.post(OPENAI_RESPONSES_URL, headers=headers, json=body_fallback)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            raise ValueError(f"Quiz generation failed (HTTP {error.response.status_code}).") from error
+        except httpx.HTTPError as error:
+            raise ValueError(f"Quiz generation request failed: {error}") from error
+
+    return _extract_output_text(response.json())
 
 
 def _safe_artifact_name(value: str) -> str:

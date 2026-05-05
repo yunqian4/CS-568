@@ -5,6 +5,7 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
   const [pdfUrl, setPdfUrl] = useState('');
   const [provider, setProvider] = useState('opendataloader');
   const [llmEnabled, setLlmEnabled] = useState(true);
+  const [quizMode, setQuizMode] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [keywordMinWords, setKeywordMinWords] = useState('20');
@@ -49,6 +50,7 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
       llmEnabled,
       maxKeywords,
       model,
+      quizMode,
       summaryMinWords,
       summaryWordRatio,
     };
@@ -197,10 +199,25 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
             <span className="field-hint">Use this when the PDF is available by URL.</span>
           </label>
 
+          <fieldset className="field-card fieldset-card">
+            <legend className="field-label">Study Mode</legend>
+            <label className="inline-control">
+              <input
+                checked={quizMode}
+                onChange={(event) => setQuizMode(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Quiz Mode</span>
+            </label>
+            <span className="field-hint">
+              Starts a stopwatch and generates 3 comprehension questions. A representation is randomly assigned for the study.
+            </span>
+          </fieldset>
+
           {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
 
           <button className="primary-button" disabled={!canSubmit} type="submit">
-            {isSubmitting ? 'Preparing reader...' : 'Confirm'}
+            {isSubmitting ? (quizMode ? 'Generating quiz…' : 'Preparing reader…') : 'Confirm'}
           </button>
         </form>
       </section>
