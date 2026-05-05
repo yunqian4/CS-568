@@ -52,12 +52,18 @@ Optional LLM representations:
 - Users may provide a request-scoped API key, or the backend may use `OPENAI_API_KEY` as the default key.
 - `OPENAI_REPRESENTATION_MODEL` from `backend/.env` or the process environment is the default representation model when the request does not specify one.
 - If no env value exists, representation generation falls back to `gpt-5-nano`.
-- `OPENAI_REPRESENTATION_PARALLELISM` controls bounded parallel representation calls; default `4`, clamped from `1` to `8`.
+- `OPENAI_REPRESENTATION_PARALLELISM` controls bounded parallel representation calls; default `2`, clamped from `1` to `8`.
+- `OPENAI_REQUEST_TIMEOUT_SECONDS` controls OpenAI HTTP read timeout for semantic and representation calls; default `300`, clamped from `10` to `600`.
+- `OPENAI_REQUEST_RETRIES` controls transient OpenAI timeout, transport, rate-limit, and server-error retries; default `3`, clamped from `0` to `5`.
 - The backend loads local defaults from `backend/.env` and then `.env` without overriding already-set process environment variables.
 - Use `backend/.env.example` as the template for local backend secrets.
 - User-supplied API keys must never be written to `dat/temp`, `manifest.json`, provider `document.json`, logs, or frontend state beyond the active request.
 - The default frontend pipeline is OpenDataLoader with LLM semantic grouping and progressive LLM representations enabled.
 - If no server default key exists for the default LLM pipeline, the frontend must require a request key before import.
+- Representation definitions are generic user-editable prompt records with `{ name, prompt, background_color, background_opacity, enabled }`.
+- Default representation definitions are `keywords` and `summary`; users may edit or disable them during a browser session.
+- Default representation backgrounds are dark with full opacity; prompt, color, and opacity edits are session-scoped by default. Cookie persistence is opt-in from the reader settings UI.
+- Generated representation payloads should expose a string `value` and `background_color`. Keyword items may remain as compatibility display data, but the canonical generated content is the string value.
 
 ## Build, Test, And Lint
 
@@ -118,6 +124,7 @@ Linting:
 - Uploaded or imported PDFs must be stored under `dat/temp/<sha256>/`, where `<sha256>` is the file content hash.
 - Each upload/import artifact folder should keep `source.pdf`, `manifest.json`, and provider-specific generated files under `providers/<provider>/`.
 - Reuse same-PDF provider cache only when `cache_version` and `cache_profile` match the current implementation; ignore artifacts from older implementations.
+- Keep parser/semantic cache identity separate from representation prompt settings, so editing representation prompts reuses the parsed document and restarts only per-block representation jobs.
 - Same-PDF cache reuse should restart pending or failed LLM representation jobs when a usable request or server API key is available.
 - Persist parsed document JSON and generated representations so future summaries or revocation workflows can use the same artifact folder.
 - Each parser/provider must identify text chunks plus their PDF locations.
@@ -138,11 +145,16 @@ Linting:
 - The OpenDataLoader provider should preserve provider-level semantic elements instead of re-merging them as raw text blocks.
 - The default reader pipeline should use OpenDataLoader chunks plus LLM semantic grouping when credentials are available.
 - LLM semantic grouping may group chunks, assign section paths, mark ignored chunks, and assign roles, but it must not create geometry or unknown chunk IDs.
+- OpenDataLoader LLM semantic grouping must preserve the provider chunk reading order and must not re-sort chunks by bounding-box coordinates before grouping.
 - LLM semantic grouping should keep chunks from the same sentence in one paragraph group; deterministic postprocessing may merge adjacent same-section groups when a sentence was split.
+- LLM semantic grouping should explicitly check paragraph sentence completeness before ending a paragraph, so adjacent continuation chunks are grouped into the same paragraph block.
+- Public LLM paragraph block IDs should use stable `paragraph-000x` labels instead of embedding provider chunk IDs or free-form LLM paragraph IDs.
 - Store OpenDataLoader LLM semantic inputs and outputs under `providers/opendataloader/llm/semantic-input.json` and `providers/opendataloader/llm/semantic.json`.
 - Split OpenDataLoader semantic grouping into bounded chunk windows, and recursively split a window if OpenAI returns an incomplete `max_output_tokens` response.
+- Keep OpenDataLoader semantic windows small enough to avoid long Responses API read timeouts.
 - Expect OpenDataLoader semantic chunking to be slower than native parsing because it may include Java conversion plus multiple sequential LLM window requests.
 - Support optional LLM-backed representation generation for semantic paragraph leaf blocks.
+- Support user-customizable prompt definitions for LLM-backed block representations.
 - Keywords should be generated only when a leaf block has at least the configured minimum word count.
 - Summaries should be generated only when a leaf block has at least the configured summary minimum word count.
 - Default LLM representation thresholds are `4` words for keywords and `35` words for summaries.
@@ -152,22 +164,29 @@ Linting:
 - Representation generation should use compact per-block/per-kind prompts: keyword calls return only `{"k":[...]}` and summary calls return only `{"s":"..."}`.
 - Representation jobs should run with bounded parallelism instead of one fully synchronized OpenAI call at a time.
 - Representation job status should distinguish pending, running, complete, and failed jobs.
+- Representation regeneration should be available for an already cached document without reparsing the PDF.
 - LLM representation metadata may be persisted, but API keys and secrets must not be persisted.
 - Keep parser selection, chunk-to-block mapping, and zoomable document construction modular so additional providers can be added without rewriting the reader contract.
 
 ## Frontend Expectations
 
 - Render the PDF in a web reader.
+- The reader should support normal PDF zoom in/out controls, with canvas, text layer, and overlays scaling together.
 - Overlay visible PDF regions with modular overlay containers.
 - Each overlay container may present one or more block representations such as keywords, summaries, or similar derived views.
 - Each block should own a set of representations, but a block may map to multiple overlays.
 - The rule that determines which block drives which overlay and which representation is shown must be modular and replaceable.
 - When one paragraph block maps to multiple text chunks, estimate summary size, keyword chip size, and region size before assigning which region displays each representation; keep source chunk frames visible without duplicate badges.
+- Chunks in the same block are the same paragraph and share block representations; each non-development representation should be displayed in at most one source chunk overlay.
 - Poll backend representation status after the reader opens and merge completed keyword/summary results into the displayed document.
 - Representation polling must update overlays without reloading the PDF document or resetting visible-page state.
 - Reader UI should expose LLM representation progress/status so pending, complete, failed, and no-eligible-block cases are visible.
 - The reader should provide controls for toggling representation visibility, including keywords and summaries.
+- The reader settings should allow users to add prompt definitions, edit default prompts, edit colors and opacity, submit edited prompts for regeneration, reset defaults, and optionally save/load/clear cookie-backed settings.
+- The reader settings should include a toggle for showing or hiding development paragraph/chunk ID labels.
+- Development paragraph/chunk ID labels should default to hidden.
 - Overlay each text chunk or block region with bounds.
+- For development, show each text chunk's owning block and chunk ID as a `block-label` overlay representation.
 - In non-LLM mode, placeholder keywords may be shown until richer representations are available.
 - In LLM mode, do not fall back to placeholder keyword chips; show generated keywords and summaries only after polling receives them.
 - Generated keyword and summary badges should use readable text size and enough spacing to distinguish multiple representations.

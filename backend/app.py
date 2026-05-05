@@ -23,13 +23,14 @@ SOURCE_PDF_NAME = "source.pdf"
 MANIFEST_NAME = "manifest.json"
 DOCUMENT_JSON_NAME = "document.json"
 CONTENT_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
-CACHE_VERSION = "opendataloader-llm-progressive-v8"
+CACHE_VERSION = "opendataloader-llm-progressive-v10"
 
 from .core.ingest import parse_pdf_provider_output
 from .core.ingest.builders import build_pdf_document_from_parsed_pdf
 from .core.ingest.llm_semantic import LlmSemanticConfig, apply_llm_semantic_grouping
 from .core.models import PdfBlock, PdfDocument
-from .core.representations import LlmRepresentationConfig
+from .core.representations import LlmRepresentationConfig, build_default_block_representations
+from .core.representations.llm import RepresentationDefinition
 from .core.representations.jobs import (
     initialize_representation_jobs,
     merge_completed_representations,
@@ -99,6 +100,7 @@ class LlmOptionsRequest(BaseModel):
     summary_min_words: int | None = None
     summary_word_ratio: float | None = None
     max_keywords: int | None = None
+    representations: list["RepresentationDefinitionRequest"] | None = None
 
     def to_config(self) -> LlmRepresentationConfig:
         """Convert request values to backend representation settings."""
@@ -111,7 +113,29 @@ class LlmOptionsRequest(BaseModel):
             summary_min_words=self.summary_min_words,
             summary_word_ratio=self.summary_word_ratio,
             max_keywords=self.max_keywords,
+            representations=_request_representation_definitions(self.representations),
         )
+
+
+class RepresentationDefinitionRequest(BaseModel):
+    """User-editable prompt and color for one block representation."""
+
+    name: str = ""
+    prompt: str = ""
+    background_color: str = "#263238"
+    background_opacity: float = 1.0
+    enabled: bool = True
+
+    def to_definition(self) -> RepresentationDefinition:
+        """Convert request values to representation settings."""
+
+        return RepresentationDefinition(
+            name=self.name,
+            prompt=self.prompt,
+            background_color=self.background_color,
+            background_opacity=self.background_opacity,
+            enabled=self.enabled,
+        ).normalized()
 
 
 class PdfUrlRequest(BaseModel):
@@ -119,6 +143,13 @@ class PdfUrlRequest(BaseModel):
 
     url: HttpUrl
     provider: str = "native"
+    llm_options: LlmOptionsRequest | None = None
+
+
+class RegenerateRepresentationsRequest(BaseModel):
+    """Request payload for regenerating cached block representations."""
+
+    provider: str = "opendataloader"
     llm_options: LlmOptionsRequest | None = None
 
 
@@ -151,6 +182,7 @@ async def upload_pdf(
     summary_min_words: int | None = Form(None),
     summary_word_ratio: float | None = Form(None),
     max_keywords: int | None = Form(None),
+    representations: str | None = Form(None),
 ) -> dict[str, object]:
     """Store an uploaded PDF and return its parsed structure."""
 
@@ -166,6 +198,7 @@ async def upload_pdf(
         summary_min_words=summary_min_words,
         summary_word_ratio=summary_word_ratio,
         max_keywords=max_keywords,
+        representations=_parse_form_representation_definitions(representations),
     )
     return _store_and_parse_pdf(
         source_name=file.filename,
@@ -214,6 +247,43 @@ def get_document_representations(
     return representation_snapshot(provider_dir)
 
 
+@app.post("/api/documents/{document_id}/representations/regenerate")
+def regenerate_document_representations(
+    document_id: str,
+    payload: RegenerateRepresentationsRequest,
+    background_tasks: BackgroundTasks,
+) -> dict[str, object]:
+    """Restart representation jobs for an existing cached document."""
+
+    document_dir = _document_dir_for_id(document_id)
+    provider = _safe_artifact_name(payload.provider)
+    provider_dir = document_dir / "providers" / provider
+    document_json_path = provider_dir / DOCUMENT_JSON_NAME
+    if not document_json_path.exists():
+        raise HTTPException(status_code=404, detail="Document provider artifacts not found.")
+
+    document_payload = _read_json(document_json_path)
+    llm_config = payload.llm_options.to_config() if payload.llm_options else LlmRepresentationConfig.from_values(enabled=True)
+    llm_config.enabled = True
+    if not _has_representation_api_key(llm_config):
+        raise HTTPException(status_code=400, detail="LLM representation regeneration requires a user API key or OPENAI_API_KEY.")
+
+    cached_document = _document_from_cached_payload(document_payload)
+    _clear_payload_representations(document_payload)
+    status = initialize_representation_jobs(cached_document, llm_config, provider_dir)
+    document_payload.setdefault("metadata", {})["llm_representations"] = status
+    document_payload["metadata"]["representation_profile"] = _representation_profile(llm_config)
+    document_payload["metadata"]["representation_definitions"] = [
+        definition.to_dict() for definition in llm_config.representations
+    ]
+    document_payload["pdf_url"] = f"/api/documents/{document_id}/file"
+    document_payload["provider"] = provider
+    document_payload["content_hash"] = document_id
+    _write_json(document_json_path, document_payload)
+    background_tasks.add_task(run_representation_jobs, cached_document, llm_config, provider_dir)
+    return document_payload
+
+
 @app.get("/api/documents/{document_id}/file")
 def get_pdf_file(document_id: str) -> FileResponse:
     """Serve the stored PDF back to the frontend viewer."""
@@ -247,6 +317,7 @@ def _store_and_parse_pdf(
     provider_dir.mkdir(parents=True, exist_ok=True)
     active_llm_config = llm_config or LlmRepresentationConfig(enabled=False)
     cache_profile = _cache_profile(provider=provider_key, llm_config=active_llm_config)
+    representation_profile = _representation_profile(active_llm_config)
 
     cached_payload = _read_cached_document_payload(
         document_dir=document_dir,
@@ -259,6 +330,15 @@ def _store_and_parse_pdf(
             llm_config=active_llm_config,
             provider_dir=provider_dir,
             background_tasks=background_tasks,
+            cache_profile=cache_profile,
+            representation_profile=representation_profile,
+        )
+        _write_manifest(
+            document_dir=document_dir,
+            source_name=source_name,
+            document_id=document_id,
+            provider=str(cached_payload.get("provider") or provider_key),
+            provider_status=_provider_status_from_payload(cached_payload, cache_profile=cache_profile),
         )
         return cached_payload
 
@@ -290,6 +370,10 @@ def _store_and_parse_pdf(
         document.metadata["llm_semantic"] = semantic_metadata
     document.metadata["cache_version"] = CACHE_VERSION
     document.metadata["cache_profile"] = cache_profile
+    document.metadata["representation_profile"] = representation_profile
+    document.metadata["representation_definitions"] = [
+        definition.to_dict() for definition in active_llm_config.representations
+    ]
 
     if active_llm_config.enabled:
         _clear_block_representations(document)
@@ -319,6 +403,7 @@ def _store_and_parse_pdf(
             "llm_representations": document.metadata.get("llm_representations"),
             "cache_version": CACHE_VERSION,
             "cache_profile": cache_profile,
+            "representation_profile": representation_profile,
         },
     )
 
@@ -338,9 +423,39 @@ def _resume_cached_representation_jobs(
     llm_config: LlmRepresentationConfig,
     provider_dir: Path,
     background_tasks: BackgroundTasks | None,
+    cache_profile: str,
+    representation_profile: str,
 ) -> dict[str, object]:
     """Restart unfinished cached representation jobs without reparsing the PDF."""
 
+    metadata = cached_payload.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        cached_payload["metadata"] = metadata
+
+    stored_representation_profile = metadata.get("representation_profile")
+    if not stored_representation_profile and _can_adopt_legacy_representation_profile(
+        metadata=metadata,
+        llm_config=llm_config,
+        representation_profile=representation_profile,
+    ):
+        metadata["representation_profile"] = representation_profile
+        metadata["representation_definitions"] = [
+            definition.to_dict() for definition in llm_config.representations
+        ]
+        metadata["cache_profile"] = cache_profile
+        _write_json(provider_dir / DOCUMENT_JSON_NAME, cached_payload)
+    elif stored_representation_profile != representation_profile:
+        return _restart_cached_representation_jobs(
+            cached_payload=cached_payload,
+            llm_config=llm_config,
+            provider_dir=provider_dir,
+            background_tasks=background_tasks,
+            cache_profile=cache_profile,
+            representation_profile=representation_profile,
+        )
+
+    metadata["cache_profile"] = cache_profile
     if not llm_config.enabled:
         return cached_payload
 
@@ -357,6 +472,77 @@ def _resume_cached_representation_jobs(
     refreshed_payload = merge_completed_representations(cached_payload, provider_dir)
     _write_json(provider_dir / DOCUMENT_JSON_NAME, refreshed_payload)
     return refreshed_payload
+
+
+def _restart_cached_representation_jobs(
+    *,
+    cached_payload: dict[str, object],
+    llm_config: LlmRepresentationConfig,
+    provider_dir: Path,
+    background_tasks: BackgroundTasks | None,
+    cache_profile: str,
+    representation_profile: str,
+) -> dict[str, object]:
+    """Reset cached representation output after prompt or threshold changes."""
+
+    cached_document = _document_from_cached_payload(cached_payload)
+    metadata = cached_payload.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        cached_payload["metadata"] = metadata
+
+    metadata["cache_profile"] = cache_profile
+    metadata["representation_profile"] = representation_profile
+    metadata["representation_definitions"] = [
+        definition.to_dict() for definition in llm_config.representations
+    ]
+
+    if llm_config.enabled:
+        _clear_payload_representations(cached_payload)
+    else:
+        _restore_payload_placeholder_representations(cached_payload)
+
+    status = initialize_representation_jobs(cached_document, llm_config, provider_dir)
+    metadata["llm_representations"] = status
+    _write_json(provider_dir / DOCUMENT_JSON_NAME, cached_payload)
+
+    if not llm_config.enabled:
+        return cached_payload
+
+    if background_tasks is not None:
+        background_tasks.add_task(run_representation_jobs, cached_document, llm_config, provider_dir)
+        return cached_payload
+
+    run_representation_jobs(cached_document, llm_config, provider_dir)
+    refreshed_payload = merge_completed_representations(cached_payload, provider_dir)
+    _write_json(provider_dir / DOCUMENT_JSON_NAME, refreshed_payload)
+    return refreshed_payload
+
+
+def _can_adopt_legacy_representation_profile(
+    *,
+    metadata: dict[str, object],
+    llm_config: LlmRepresentationConfig,
+    representation_profile: str,
+) -> bool:
+    """Treat pre-profile default representation caches as current."""
+
+    if not llm_config.enabled:
+        return representation_profile == "placeholder"
+
+    status = metadata.get("llm_representations") if isinstance(metadata.get("llm_representations"), dict) else {}
+    if status.get("status") != "complete" or int(status.get("failed_jobs") or 0):
+        return False
+
+    legacy_default_config = LlmRepresentationConfig.from_values(
+        enabled=True,
+        model=llm_config.model,
+        keyword_min_words=llm_config.keyword_min_words,
+        summary_min_words=llm_config.summary_min_words,
+        summary_word_ratio=llm_config.summary_word_ratio,
+        max_keywords=llm_config.max_keywords,
+    )
+    return representation_profile == _representation_profile(legacy_default_config)
 
 
 def _document_from_cached_payload(payload: dict[str, object]) -> PdfDocument:
@@ -418,7 +604,10 @@ def _read_cached_document_payload(
         return None
 
     metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
-    if metadata.get("cache_version") != CACHE_VERSION or metadata.get("cache_profile") != cache_profile:
+    if metadata.get("cache_version") != CACHE_VERSION or not _cache_profile_matches(
+        str(metadata.get("cache_profile") or ""),
+        cache_profile,
+    ):
         return None
 
     document_id = str(payload.get("document_id") or document_dir.name)
@@ -430,20 +619,66 @@ def _read_cached_document_payload(
 
 def _cache_profile(provider: str, llm_config: LlmRepresentationConfig) -> str:
     semantic_mode = "opendataloader-llm" if provider == "opendataloader" and llm_config.enabled else "heuristic"
-    representation_mode = "llm" if llm_config.enabled else "placeholder"
+    semantic_model = llm_config.model if semantic_mode == "opendataloader-llm" else "none"
     return "|".join(
         [
             CACHE_VERSION,
             f"provider={provider}",
             f"semantic={semantic_mode}",
-            f"representations={representation_mode}",
-            f"model={llm_config.model}",
-            f"kw_min={llm_config.keyword_min_words}",
-            f"summary_min={llm_config.summary_min_words}",
-            f"summary_ratio={llm_config.summary_word_ratio}",
-            f"max_keywords={llm_config.max_keywords}",
+            f"semantic_model={semantic_model}",
         ]
     )
+
+
+def _representation_profile(llm_config: LlmRepresentationConfig) -> str:
+    if not llm_config.enabled:
+        return "placeholder"
+
+    payload = {
+        "mode": "llm",
+        "model": llm_config.model,
+        "keyword_min_words": llm_config.keyword_min_words,
+        "summary_min_words": llm_config.summary_min_words,
+        "summary_word_ratio": llm_config.summary_word_ratio,
+        "max_keywords": llm_config.max_keywords,
+        "definitions": [definition.to_dict() for definition in llm_config.representations],
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _cache_profile_matches(stored_profile: str, current_profile: str) -> bool:
+    """Accept current parser cache profiles and compatible legacy profiles."""
+
+    if stored_profile == current_profile:
+        return True
+
+    stored = _cache_profile_parts(stored_profile)
+    current = _cache_profile_parts(current_profile)
+    if not stored or not current:
+        return False
+    if stored.get("version") != current.get("version"):
+        return False
+    if stored.get("provider") != current.get("provider"):
+        return False
+    if stored.get("semantic") != current.get("semantic"):
+        return False
+    if current.get("semantic") == "opendataloader-llm":
+        stored_model = stored.get("semantic_model") or stored.get("model")
+        return stored_model == current.get("semantic_model")
+    return True
+
+
+def _cache_profile_parts(profile: str) -> dict[str, str]:
+    parts = [part for part in str(profile or "").split("|") if part]
+    if not parts:
+        return {}
+    parsed = {"version": parts[0]}
+    for part in parts[1:]:
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        parsed[key] = value
+    return parsed
 
 
 def _apply_provider_semantic_enrichment(
@@ -478,6 +713,30 @@ def _llm_config_from_url_payload(payload: PdfUrlRequest) -> LlmRepresentationCon
             options.enabled = _llm_enabled_for_provider(payload.provider, None)
         return options
     return LlmRepresentationConfig.from_values(enabled=_llm_enabled_for_provider(payload.provider, None))
+
+
+def _request_representation_definitions(
+    definitions: list[RepresentationDefinitionRequest] | None,
+) -> list[RepresentationDefinition] | None:
+    if definitions is None:
+        return None
+    return [definition.to_definition() for definition in definitions]
+
+
+def _parse_form_representation_definitions(value: str | None) -> list[RepresentationDefinition] | None:
+    if not value:
+        return None
+    try:
+        raw_definitions = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=400, detail="Invalid representations JSON.") from error
+    if not isinstance(raw_definitions, list):
+        raise HTTPException(status_code=400, detail="Representations must be a JSON list.")
+    return [
+        RepresentationDefinitionRequest.model_validate(raw_definition).to_definition()
+        for raw_definition in raw_definitions
+        if isinstance(raw_definition, dict)
+    ]
 
 
 def _document_dir_for_id(document_id: str) -> Path:
@@ -518,6 +777,43 @@ def _read_manifest(document_dir: Path) -> dict[str, object]:
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=400, detail="Stored document JSON is unreadable.") from error
+
+
+def _clear_payload_representations(payload: dict[str, object]) -> None:
+    for block in _safe_list(payload.get("blocks")):
+        if isinstance(block, dict):
+            block["representations"] = []
+
+
+def _restore_payload_placeholder_representations(payload: dict[str, object]) -> None:
+    for block in _safe_list(payload.get("blocks")):
+        if not isinstance(block, dict):
+            continue
+        block["representations"] = [
+            representation.to_dict()
+            for representation in build_default_block_representations(str(block.get("text") or ""))
+        ]
+
+
+def _provider_status_from_payload(payload: dict[str, object], *, cache_profile: str) -> dict[str, object]:
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    return {
+        "status": "parsed",
+        "document_json": f"providers/{payload.get('provider') or metadata.get('provider')}/document.json",
+        "parser": metadata.get("parser"),
+        "paragraph_count": metadata.get("paragraph_count"),
+        "llm_representations": metadata.get("llm_representations"),
+        "cache_version": CACHE_VERSION,
+        "cache_profile": cache_profile,
+        "representation_profile": metadata.get("representation_profile"),
+    }
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:

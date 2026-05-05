@@ -11,13 +11,14 @@ from typing import Any
 
 from ..representations.llm import (
     DEFAULT_MODEL,
+    _bounded_int,
     _extract_output_text,
     _post_openai_response,
 )
 from .contracts import ParsedPdfDocument
 
-SEMANTIC_WINDOW_CHUNK_LIMIT = 24
-SEMANTIC_WINDOW_CHAR_LIMIT = 12000
+SEMANTIC_WINDOW_CHUNK_LIMIT = 12
+SEMANTIC_WINDOW_CHAR_LIMIT = 6000
 SEMANTIC_MAX_OUTPUT_TOKENS = 8192
 SENTENCE_END_RE = re.compile(r"""[.!?]["')\]]*$""")
 CONTINUATION_START_RE = re.compile(r"""^[a-z,;:)\]\-]""")
@@ -31,7 +32,8 @@ class LlmSemanticConfig:
     api_key: str | None = None
     model: str = DEFAULT_MODEL
     artifact_dir: Path | None = None
-    timeout_seconds: float = 60.0
+    timeout_seconds: float = 300.0
+    request_retries: int = 3
     endpoint: str = "https://api.openai.com/v1/responses"
     window_chunk_limit: int = SEMANTIC_WINDOW_CHUNK_LIMIT
     window_char_limit: int = SEMANTIC_WINDOW_CHAR_LIMIT
@@ -53,6 +55,7 @@ class LlmSemanticConfig:
             api_key=api_key.strip() if api_key and api_key.strip() else None,
             model=(model or os.environ.get("OPENAI_REPRESENTATION_MODEL") or DEFAULT_MODEL).strip(),
             artifact_dir=artifact_dir,
+            request_retries=_bounded_int(os.environ.get("OPENAI_REQUEST_RETRIES"), 3, minimum=0, maximum=5),
         )
 
 
@@ -96,11 +99,13 @@ def apply_llm_semantic_grouping(parsed_document: ParsedPdfDocument, config: LlmS
 
 def _semantic_input(parsed_document: ParsedPdfDocument) -> dict[str, Any]:
     chunks = []
+    reading_order = 0
     for page in sorted(parsed_document.pages, key=lambda item: item.page_number):
-        for chunk in sorted(page.chunks, key=lambda item: (item.y, item.x)):
+        for chunk in page.chunks:
             chunks.append(
                 {
                     "chunk_id": chunk.chunk_id,
+                    "reading_order": reading_order,
                     "page_number": chunk.page_number,
                     "type": chunk.semantic_type or "text",
                     "heading_level": chunk.heading_level,
@@ -113,6 +118,7 @@ def _semantic_input(parsed_document: ParsedPdfDocument) -> dict[str, Any]:
                     },
                 }
             )
+            reading_order += 1
     return {"title": parsed_document.title, "chunks": chunks}
 
 
@@ -147,7 +153,8 @@ def _call_semantic_windows(
             for paragraph in semantic_groups["paragraphs"]:
                 if not paragraph["section_path"] and previous_section_path:
                     paragraph["section_path"] = list(previous_section_path)
-                paragraph["paragraph_id"] = f"paragraph-{len(paragraphs) + 1:04d}-{paragraph['paragraph_id']}"
+                paragraph["source_paragraph_id"] = paragraph.get("paragraph_id") or ""
+                paragraph["paragraph_id"] = f"paragraph-{len(paragraphs) + 1:04d}"
                 if paragraph["section_path"]:
                     previous_section_path = list(paragraph["section_path"])
                 paragraphs.append(paragraph)
@@ -257,17 +264,10 @@ def _call_semantic_llm(
     payload = _post_openai_response(
         api_key=api_key,
         config=config,
+        operation="OpenDataLoader LLM semantic parsing",
         body={
             "model": config.model,
-            "instructions": (
-                "Group OpenDataLoader PDF chunks into a semantic document outline. "
-                "Use only supplied chunk IDs. Do not invent IDs or geometry. "
-                "Return sections as paths and paragraph groups for body text. "
-                "Do not split one sentence across two paragraphs. If consecutive chunks continue the same sentence, "
-                "put those chunk IDs in one paragraph group. Split only at semantic paragraph boundaries, headings, "
-                "tables, captions, or list-item boundaries. "
-                "Put authors, affiliations, references, headers, footers, and non-reading artifacts in ignored_chunk_ids."
-            ),
+            "instructions": _semantic_instructions(),
             "input": json.dumps(semantic_input, ensure_ascii=False),
             "max_output_tokens": config.max_output_tokens,
             "store": False,
@@ -287,6 +287,24 @@ def _call_semantic_llm(
         raise ValueError("OpenAI returned non-JSON semantic parsing output.") from error
 
 
+def _semantic_instructions() -> str:
+    """Return the prompt used to group OpenDataLoader chunks into paragraphs."""
+
+    return (
+        "Group OpenDataLoader PDF chunks into a semantic document outline. "
+        "Use only supplied chunk IDs. Do not invent IDs or geometry. "
+        "Chunks are already in provider reading_order; preserve that order when grouping and ordering paragraphs. "
+        "Do not reorder chunks by bounding boxes. "
+        "Each paragraph item may and usually should contain multiple chunk_ids when adjacent chunks are part of the same paragraph. "
+        "Before ending a paragraph, check whether its combined text is sentence-complete. "
+        "If the last sentence is incomplete, hyphenated, or naturally continues into the next chunk, include the next chunk in the same paragraph. "
+        "If the next chunk starts lowercase, with punctuation, or with a continuation phrase, treat it as continuation unless a heading, table, caption, or list boundary intervenes. "
+        "Split only at real semantic paragraph boundaries, headings, tables, captions, or list-item boundaries. "
+        "Return sections as paths and paragraph groups for body text. "
+        "Put authors, affiliations, references, headers, footers, and non-reading artifacts in ignored_chunk_ids."
+    )
+
+
 def _semantic_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -299,6 +317,7 @@ def _semantic_schema() -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "paragraph_id": {"type": "string"},
+                        "source_paragraph_id": {"type": "string"},
                         "chunk_ids": {"type": "array", "items": {"type": "string"}},
                         "section_path": {"type": "array", "items": {"type": "string"}},
                         "role": {"type": "string"},
@@ -315,6 +334,7 @@ def _semantic_schema() -> dict[str, Any]:
 
 def _validate_semantic_output(output: dict[str, Any], *, semantic_input: dict[str, Any]) -> dict[str, Any]:
     known_chunk_ids = {str(chunk["chunk_id"]) for chunk in semantic_input["chunks"]}
+    chunk_order = _chunk_order_map(semantic_input)
     used_chunk_ids: set[str] = set()
     paragraphs: list[dict[str, Any]] = []
 
@@ -326,16 +346,19 @@ def _validate_semantic_output(output: dict[str, Any], *, semantic_input: dict[st
         if not chunk_ids:
             continue
 
+        chunk_ids = sorted(_dedupe_preserving_order(chunk_ids), key=lambda chunk_id: chunk_order[chunk_id])
         used_chunk_ids.update(chunk_ids)
         paragraphs.append(
             {
                 "paragraph_id": _safe_id(item.get("paragraph_id")) or f"paragraph-{len(paragraphs) + 1:04d}",
+                "source_paragraph_id": "",
                 "chunk_ids": chunk_ids,
                 "section_path": [str(part).strip() for part in item.get("section_path", []) if str(part).strip()],
                 "role": str(item.get("role") or "body").strip().lower() or "body",
             }
         )
 
+    paragraphs.sort(key=lambda paragraph: min(chunk_order[chunk_id] for chunk_id in paragraph["chunk_ids"]))
     ignored_chunk_ids = [str(chunk_id).strip() for chunk_id in output.get("ignored_chunk_ids", []) if str(chunk_id).strip()]
     unknown_ignored = [chunk_id for chunk_id in ignored_chunk_ids if chunk_id not in known_chunk_ids]
     if unknown_ignored:
@@ -345,6 +368,15 @@ def _validate_semantic_output(output: dict[str, Any], *, semantic_input: dict[st
         "title": str(output.get("title") or semantic_input.get("title") or "").strip(),
         "ignored_chunk_ids": sorted(set(ignored_chunk_ids) - used_chunk_ids),
         "paragraphs": paragraphs,
+    }
+
+
+def _chunk_order_map(semantic_input: dict[str, Any]) -> dict[str, int]:
+    """Return the provider reading order for semantic chunks."""
+
+    return {
+        str(chunk["chunk_id"]): int(chunk.get("reading_order", index))
+        for index, chunk in enumerate(semantic_input["chunks"])
     }
 
 

@@ -22,6 +22,9 @@ class PdfBlockRepresentation:
 
     kind: str
     label: str
+    value: str = ""
+    background_color: str = "#263238"
+    background_opacity: float = 1.0
     text: str | None = None
     items: list[str] = field(default_factory=list)
 
@@ -29,6 +32,9 @@ class PdfBlockRepresentation:
         return {
             "kind": self.kind,
             "label": self.label,
+            "value": self.value,
+            "background_color": self.background_color,
+            "background_opacity": self.background_opacity,
             "text": self.text,
             "items": list(self.items),
         }

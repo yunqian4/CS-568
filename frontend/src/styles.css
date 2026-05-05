@@ -186,12 +186,108 @@ select {
 .reader-settings-panel {
   display: grid;
   gap: 10px;
-  min-width: 150px;
+  width: min(520px, calc(100vw - 44px));
+  max-height: min(760px, calc(100vh - 96px));
+  overflow: auto;
   padding: 12px;
   border: 1px solid rgba(23, 33, 33, 0.14);
   border-radius: 8px;
   background: rgba(255, 251, 245, 0.96);
   box-shadow: 0 14px 34px rgba(54, 38, 18, 0.18);
+}
+
+.reader-settings-heading,
+.reader-representation-row,
+.reader-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.reader-settings-heading {
+  justify-content: space-between;
+}
+
+.reader-representation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reader-representation-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.reader-representation-row {
+  justify-content: space-between;
+}
+
+.settings-opacity-control {
+  display: grid;
+  flex: 1 1 150px;
+  gap: 4px;
+  color: rgba(23, 33, 33, 0.72);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.settings-opacity-control input {
+  width: 100%;
+}
+
+.settings-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settings-field .text-input {
+  font-weight: 400;
+  text-transform: none;
+}
+
+.settings-prompt-input {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.settings-color-input {
+  width: 44px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid rgba(23, 33, 33, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.settings-mini-button,
+.settings-panel-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(23, 33, 33, 0.08);
+  color: #172121;
+  cursor: pointer;
+}
+
+.settings-regenerate-input {
+  flex: 1 1 160px;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.reader-settings-status {
+  margin: 0;
+  color: rgba(23, 33, 33, 0.68);
+  font-size: 0.86rem;
 }
 
 .llm-status-chip {
@@ -267,8 +363,38 @@ select {
   gap: 22px;
 }
 
+.pdf-zoom-toolbar {
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 8px;
+  border: 1px solid rgba(23, 33, 33, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.96);
+  box-shadow: 0 10px 24px rgba(54, 38, 18, 0.14);
+}
+
+.pdf-zoom-toolbar input {
+  width: 150px;
+}
+
+.pdf-zoom-button {
+  min-width: 38px;
+  min-height: 34px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(23, 33, 33, 0.08);
+  color: #172121;
+  cursor: pointer;
+}
+
 .pdf-page-card {
   padding: 20px;
+  overflow-x: auto;
 }
 
 .pdf-page-meta {
@@ -282,13 +408,13 @@ select {
 
 .pdf-page-stage {
   position: relative;
-  max-width: 100%;
+  max-width: none;
 }
 
 .pdf-page-canvas,
 .pdf-page-placeholder {
   display: block;
-  max-width: 100%;
+  max-width: none;
   border-radius: 8px;
 }
 
@@ -386,6 +512,8 @@ select {
   white-space: normal;
   overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
 }
 
 .overlay-badge-summary {
@@ -397,6 +525,17 @@ select {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--overlay-summary-lines, 3);
   background: rgba(97, 66, 24, 0.94);
+}
+
+.overlay-badge-block-label {
+  max-width: 100%;
+  padding: 2px 5px;
+  background: rgba(35, 75, 101, 0.6);
+  color: #f6fbff;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: var(--overlay-block-label-font-size, 8px);
+  line-height: 1.15;
+  white-space: normal;
 }
 
 .overlay-badge-keywords {
@@ -415,12 +554,14 @@ select {
   padding: var(--overlay-keyword-padding-y, 3px) var(--overlay-keyword-padding-x, 7px);
   border: 1px solid rgba(255, 248, 234, 0.22);
   border-radius: 7px;
-  background: rgba(146, 92, 24, 0.96);
+  background: var(--overlay-representation-background, rgba(146, 92, 24, 0.96));
   box-shadow: 0 2px 7px rgba(79, 47, 8, 0.18);
   color: #fff8ea;
   font-size: var(--overlay-keyword-font-size, 0.94rem);
   overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
 }
 
 @media (max-width: 900px) {

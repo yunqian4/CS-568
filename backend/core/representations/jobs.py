@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -301,7 +302,7 @@ def _jobs_dir(provider_dir: Path) -> Path:
 
 
 def _representation_path(jobs_dir: Path, block_id: str, kind: str) -> Path:
-    return jobs_dir / block_id / f"{kind}.json"
+    return jobs_dir / block_id / f"{_safe_job_name(kind)}.json"
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -311,3 +312,8 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_job_name(value: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip(".-")
+    return safe or "representation"

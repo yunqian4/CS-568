@@ -26,8 +26,13 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - The default pipeline is OpenDataLoader with LLM semantic grouping enabled.
 - Two-column papers are a primary target for the native parsing path.
 - The reader displays the PDF in-browser and overlays semantic chunk or block bounds.
+- The reader supports PDF-style zoom controls; the canvas, selectable text layer, chunk bounds, and representations scale together.
 - Each block owns a set of representations such as keywords, summaries, and later derived variants.
 - Optional LLM representation generation fills qualifying paragraph leaf blocks progressively; placeholders are reserved for non-LLM mode only.
+- LLM representation definitions are generic prompt records with `name`, `prompt`, `background_color`, `background_opacity`, and `enabled`.
+- Default representation backgrounds are dark and fully opaque.
+- Users can edit default keyword and summary prompts, add custom representation prompts, choose background colors and opacity, and submit prompt changes to restart representation generation for the current cached PDF.
+- Prompt, color, and opacity settings are browser-session scoped by default, with explicit cookie save/load/clear controls.
 - LLM keywords are generated above a configurable short-block threshold, defaulting to `4` words.
 - LLM summaries are generated above a configurable long-block threshold, defaulting to `35` words, and target a configurable word-count ratio, defaulting to `0.15`.
 - Users may provide a request-scoped OpenAI API key or rely on the backend default `OPENAI_API_KEY`.
@@ -61,19 +66,23 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - OpenDataLoader bounding boxes are converted from PDF points `[left, bottom, right, top]` into normalized frontend overlay coordinates.
 - The semantic pipeline now records `opendataloader-semantic-json-v1` when OpenDataLoader semantic JSON drives the zoomable tree.
 - The backend now persists each PDF under `dat/temp/<sha256>/source.pdf`, stores a `manifest.json`, and writes provider-specific parsed API payloads under `providers/<provider>/document.json`.
-- Same-PDF imports reuse cached provider payloads only when the stored `cache_version` and `cache_profile` match the current implementation.
-- Current cache profiles include the parser, semantic mode, LLM model, and representation thresholds; older cache versions are ignored.
+- Same-PDF imports reuse cached provider payloads only when the stored `cache_version` and parser/semantic `cache_profile` match the current implementation.
+- Current parser cache profiles include the parser, semantic mode, and semantic LLM model; representation prompt settings are tracked separately so prompt edits do not force reparsing.
 - The backend can enrich semantic paragraph blocks with OpenAI-backed keyword and summary representations after parsing and before writing provider `document.json`.
 - Request-provided OpenAI keys are used only for the active import and are not persisted in manifests or document payloads.
 - LLM representation settings include model, keyword minimum words, summary minimum words, summary ratio, and maximum keyword count.
 - The default LLM representation model comes from `OPENAI_REPRESENTATION_MODEL` in `backend/.env` or the process environment.
 - If no model is configured in env and the request does not provide one, the backend falls back to `gpt-5-nano`.
-- LLM representation calls run with bounded parallelism controlled by `OPENAI_REPRESENTATION_PARALLELISM`, defaulting to `4` and clamped from `1` to `8`.
+- LLM representation calls run with bounded parallelism controlled by `OPENAI_REPRESENTATION_PARALLELISM`, defaulting to `2` and clamped from `1` to `8`.
+- OpenAI semantic and representation calls use `OPENAI_REQUEST_TIMEOUT_SECONDS` and `OPENAI_REQUEST_RETRIES`, defaulting to a 300 second read timeout and three transient retries for timeouts, rate limits, and server errors.
 - The backend now loads default environment values from `backend/.env` and then `.env` while preserving any variables already set in the process environment.
 - Local env files are ignored by git, with `backend/.env.example` kept as the backend template.
 - OpenDataLoader LLM semantic parsing stores normalized chunk input at `providers/opendataloader/llm/semantic-input.json` and validated semantic output at `providers/opendataloader/llm/semantic.json`.
 - LLM semantic grouping is allowed to group existing chunks, set section paths, assign roles, and mark ignored chunks; geometry remains sourced from parser chunks.
+- OpenDataLoader LLM semantic input preserves provider chunk reading order, records a `reading_order` index, and validates paragraph output in that order rather than using bounding-box sorting.
 - LLM semantic grouping is instructed not to split a single sentence across paragraphs, and backend postprocessing merges adjacent same-section groups when the sentence boundary was split.
+- LLM semantic grouping now instructs the model to check sentence completeness before ending a paragraph and to merge adjacent continuation chunks into one paragraph group.
+- Public LLM paragraph block IDs use stable `paragraph-000x` labels, while source chunk IDs remain visible separately in development overlays.
 - LLM semantic grouping now sends bounded chunk windows rather than one whole-document prompt, and recursively splits any window that returns an incomplete `max_output_tokens` response.
 - Per-window semantic inputs and outputs are cached under `providers/opendataloader/llm/semantic-windows/`.
 - Semantic chunking can still take time because OpenDataLoader conversion and LLM semantic windows run before the reader can open.
@@ -82,12 +91,18 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Representation jobs are executed through a bounded worker pool rather than a fully synchronized one-call-at-a-time loop.
 - Representation OpenAI calls use compact per-block/per-kind prompts, sending only the paragraph text and receiving only `{"k":[...]}` for keywords or `{"s":"..."}` for summaries.
 - Representation calls retry once with a larger output-token budget if OpenAI reports `max_output_tokens`.
+- Representation calls now use editable definitions. Keywords still return compact keyword arrays for chip compatibility, while other definitions return a string value.
+- Generated block representations expose `value` and `background_color` in addition to legacy `text` or `items` compatibility fields.
+- The backend exposes `POST /api/documents/{document_id}/representations/regenerate` to restart cached representation jobs without reparsing the PDF.
+- Representation prompt or color changes reuse the cached parsed document and restart only the per-block representation jobs.
 - LLM-mode imports clear heuristic placeholder block representations before returning, so the reader shows generated outputs only after jobs complete.
 - Same-PDF cache reuse now retries pending or failed representation jobs when a usable request or server key is available.
 - The frontend polls `GET /api/documents/{document_id}/representations?provider=<provider>` and merges completed representation results into reader state.
 - Representation polling should not reload the PDF file, reset visible pages, or rebuild canvas state when the poll response has no new data.
 - The reader shows a bottom-right LLM representation status chip for pending, complete, failed, and no-eligible-block cases.
 - The reader header no longer shows provider/pipeline metadata, and a lower-right settings control toggles keyword and summary visibility.
+- The lower-right settings panel also edits representation prompts, colors, opacity, visibility, custom definitions, cookie persistence, and regeneration credentials.
+- The lower-right settings panel includes a paragraph ID toggle for development block/chunk labels, defaulting to hidden.
 - Frontend overlays now estimate summary footprint, keyword chip footprint, and chunk region size to place each block representation on the best fitting source region without duplicate badges.
 - Frontend representation badges are clipped inside the source chunk overlay, keyword chips can wrap onto separate lines, and keywords render below any same-block summary.
 - Frontend keyword display now gives each keyword its own rounded chip background instead of one combined keyword badge.
@@ -118,7 +133,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Decide how to represent deeper heading levels beyond the current section/subsection/paragraph tree.
 - Add provider abstraction if LLM representation generation becomes a frequent workflow.
 - Consider adding non-OpenAI LLM providers behind the same representation generation boundary.
-- Decide whether generated representations should be refreshable after import without reparsing the PDF.
+- Tune current-document representation regeneration UX after testing with real request-scoped API keys and long PDFs.
 - Consider replacing polling with SSE if representation latency or status visibility becomes a UX issue.
 - Add recovery for pending in-process representation jobs after backend restart when request-scoped keys are unavailable.
 - Tune overlay placement heuristics against representative PDFs so summary and keyword region assignment remains readable across narrow columns and multi-page blocks.
@@ -151,6 +166,7 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - User-provided API keys are not persisted in `dat/temp`, manifests, provider documents, or frontend route state.
 - Default OpenDataLoader LLM import requires either a server default key or a user request key.
 - OpenDataLoader LLM semantic output cannot reference unknown chunk IDs.
+- OpenDataLoader LLM semantic paragraph order follows provider chunk reading order, including for two-column papers.
 - OpenDataLoader LLM semantic input and output are cached in the provider temp folder.
 - OpenDataLoader LLM semantic grouping can complete long documents through chunk-window retries when a single LLM response would exceed output limits.
 - Leaf paragraph blocks above the configured keyword threshold receive generated keywords when LLM generation is enabled.
@@ -158,6 +174,10 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Keyword and summary representations can arrive after the reader opens and are merged into overlays by polling.
 - Placeholder keyword chips are not shown in LLM mode while representation jobs are pending or failed.
 - Readers can toggle keyword and summary visibility without changing the underlying parsed document.
+- Readers can edit representation prompt definitions, colors, and opacity in the current session.
+- Readers can show or hide development paragraph/chunk ID labels from the reader settings panel.
+- Readers can regenerate representations for a cached document without reparsing the PDF when an API key is available.
+- Readers can opt in to cookie persistence for prompt and color settings.
 - Each provider returns text chunks with locations that are sufficient for overlay placement.
 - The backend builds a semantic zoomable document tree from parsed PDF output.
 - The zoomable document exposes sections, subsections, and paragraph leaves.
@@ -167,6 +187,8 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - The GROBID parser excludes authors, affiliations, and references by keeping only TEI body content.
 - The OpenDataLoader parser preserves semantic JSON elements and maps their bounding boxes to frontend overlays.
 - Multi-chunk paragraph blocks display each keyword or summary representation once on a predicted-fit source region, while all source chunk frames remain visible.
+- Development overlays include a `block-label` representation on every text chunk with the owning block ID and chunk ID.
+- Chunks in the same block are treated as one paragraph that shares block representations, and each non-development representation is placed in at most one chunk overlay.
 - Semantic paragraphs should not split one sentence across two zoomable blocks.
 - Each block can expose multiple representations such as keywords and summaries.
 - A block may drive multiple overlays.
@@ -224,6 +246,8 @@ Then fill in `backend/.env`:
 ```env
 OPENAI_API_KEY=...
 OPENAI_REPRESENTATION_MODEL=gpt-5-nano
+OPENAI_REQUEST_TIMEOUT_SECONDS=300
+OPENAI_REQUEST_RETRIES=3
 ```
 
 Verification commands:
@@ -244,6 +268,7 @@ Relevant API endpoints:
 - `POST /api/documents/upload?provider=opendataloader`
 - `POST /api/documents/from-url`
 - `GET /api/documents/{document_id}/representations?provider=<provider>`
+- `POST /api/documents/{document_id}/representations/regenerate`
 
 ## Working Conventions
 

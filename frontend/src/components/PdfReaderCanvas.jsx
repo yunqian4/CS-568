@@ -5,17 +5,22 @@ import { buildOverlayState } from '../overlays/buildPageOverlays';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-const PAGE_SCALE = 1.45;
+const BASE_PAGE_SCALE = 1.45;
 const RENDER_BUFFER = 1;
 const OVERLAY_FONT_MAX = 15;
 const OVERLAY_FONT_MIN = 7.5;
+const ZOOM_MAX = 3;
+const ZOOM_MIN = 0.6;
+const ZOOM_STEP = 0.15;
 
-export default function PdfReaderCanvas({ document, visibleRepresentations }) {
+export default function PdfReaderCanvas({ document, representationSettings, visibleRepresentations }) {
   const [pdfInstance, setPdfInstance] = useState(null);
   const [pageSizes, setPageSizes] = useState([]);
   const [visiblePages, setVisiblePages] = useState(() => new Set([1]));
   const [errorMessage, setErrorMessage] = useState('');
+  const [zoom, setZoom] = useState(1);
   const stageRef = useRef(null);
+  const renderScale = BASE_PAGE_SCALE * zoom;
   const pageDataByNumber = useMemo(
     () => new Map(document.pages.map((page) => [page.page_number, page])),
     [document.pages],
@@ -23,6 +28,10 @@ export default function PdfReaderCanvas({ document, visibleRepresentations }) {
   const overlayState = useMemo(
     () => buildOverlayState(document),
     [document.blocks, document.metadata?.llm_representations?.enabled, document.pages],
+  );
+  const representationSettingsMap = useMemo(
+    () => buildRepresentationSettingsMap(representationSettings),
+    [representationSettings],
   );
 
   useEffect(() => {
@@ -38,21 +47,8 @@ export default function PdfReaderCanvas({ document, visibleRepresentations }) {
       try {
         loadingTask = pdfjsLib.getDocument(document.pdf_url);
         const pdf = await loadingTask.promise;
-        const sizes = [];
-
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-          const page = await pdf.getPage(pageNumber);
-          const viewport = page.getViewport({ scale: PAGE_SCALE });
-          sizes.push({
-            height: viewport.height,
-            pageNumber,
-            width: viewport.width,
-          });
-        }
-
         if (!cancelled) {
           setPdfInstance(pdf);
-          setPageSizes(sizes);
         }
       } catch (error) {
         if (!cancelled) {
@@ -67,6 +63,35 @@ export default function PdfReaderCanvas({ document, visibleRepresentations }) {
       loadingTask?.destroy();
     };
   }, [document.pdf_url]);
+
+  useEffect(() => {
+    if (!pdfInstance) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function updatePageSizes() {
+      const sizes = [];
+      for (let pageNumber = 1; pageNumber <= pdfInstance.numPages; pageNumber += 1) {
+        const page = await pdfInstance.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: renderScale });
+        sizes.push({
+          height: viewport.height,
+          pageNumber,
+          width: viewport.width,
+        });
+      }
+      if (!cancelled) {
+        setPageSizes(sizes);
+      }
+    }
+
+    updatePageSizes();
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfInstance, renderScale]);
 
   useEffect(() => {
     if (!pageSizes.length) {
@@ -113,24 +138,62 @@ export default function PdfReaderCanvas({ document, visibleRepresentations }) {
   }
 
   return (
-    <section className="pdf-stack" ref={stageRef}>
-      {pageSizes.map((page) => (
-        <PdfPageCard
-          key={page.pageNumber}
-          blockCount={overlayState.blockCountByPageNumber.get(page.pageNumber) ?? 0}
-          overlays={overlayState.overlaysByPageNumber.get(page.pageNumber) ?? []}
-          page={page}
-          pageData={pageDataByNumber.get(page.pageNumber)}
-          pdf={pdfInstance}
-          shouldRender={visiblePages.has(page.pageNumber)}
-          visibleRepresentations={visibleRepresentations}
-        />
-      ))}
-    </section>
+    <>
+      <PdfZoomControls zoom={zoom} onZoomChange={setZoom} />
+      <section className="pdf-stack" ref={stageRef}>
+        {pageSizes.map((page) => (
+          <PdfPageCard
+            key={page.pageNumber}
+            blockCount={overlayState.blockCountByPageNumber.get(page.pageNumber) ?? 0}
+            overlays={overlayState.overlaysByPageNumber.get(page.pageNumber) ?? []}
+            page={page}
+            pageData={pageDataByNumber.get(page.pageNumber)}
+            pdf={pdfInstance}
+            renderScale={renderScale}
+            shouldRender={visiblePages.has(page.pageNumber)}
+            representationSettingsMap={representationSettingsMap}
+            visibleRepresentations={visibleRepresentations}
+          />
+        ))}
+      </section>
+    </>
   );
 }
 
-function PdfPageCard({ blockCount, overlays, page, pageData, pdf, shouldRender, visibleRepresentations }) {
+function PdfZoomControls({ onZoomChange, zoom }) {
+  return (
+    <div className="pdf-zoom-toolbar" aria-label="PDF zoom controls">
+      <button
+        className="pdf-zoom-button"
+        onClick={() => onZoomChange((current) => clampZoom(current - ZOOM_STEP))}
+        type="button"
+      >
+        -
+      </button>
+      <input
+        aria-label="PDF zoom"
+        max={ZOOM_MAX}
+        min={ZOOM_MIN}
+        onChange={(event) => onZoomChange(clampZoom(Number(event.target.value)))}
+        step={ZOOM_STEP}
+        type="range"
+        value={zoom}
+      />
+      <button
+        className="pdf-zoom-button"
+        onClick={() => onZoomChange((current) => clampZoom(current + ZOOM_STEP))}
+        type="button"
+      >
+        +
+      </button>
+      <button className="pdf-zoom-button" onClick={() => onZoomChange(1)} type="button">
+        {Math.round(zoom * 100)}%
+      </button>
+    </div>
+  );
+}
+
+function PdfPageCard({ blockCount, overlays, page, pageData, pdf, renderScale, representationSettingsMap, shouldRender, visibleRepresentations }) {
   const [cursorPoint, setCursorPoint] = useState(null);
   const [isPointerDown, setIsPointerDown] = useState(false);
 
@@ -167,12 +230,14 @@ function PdfPageCard({ blockCount, overlays, page, pageData, pdf, shouldRender, 
           height={page.height}
           pageNumber={page.pageNumber}
           pdf={pdf}
+          renderScale={renderScale}
           shouldRender={shouldRender}
           width={page.width}
         />
         <PdfTextLayer
           pageNumber={page.pageNumber}
           pdf={pdf}
+          renderScale={renderScale}
           shouldRender={shouldRender}
         />
         <PdfOverlayLayer
@@ -180,6 +245,7 @@ function PdfPageCard({ blockCount, overlays, page, pageData, pdf, shouldRender, 
           overlays={overlays}
           pageHeight={page.height}
           pageWidth={page.width}
+          representationSettingsMap={representationSettingsMap}
           shouldRender={shouldRender}
           visibleRepresentations={visibleRepresentations}
         />
@@ -188,7 +254,7 @@ function PdfPageCard({ blockCount, overlays, page, pageData, pdf, shouldRender, 
   );
 }
 
-function PdfPageSurface({ height, pageNumber, pdf, shouldRender, width }) {
+function PdfPageSurface({ height, pageNumber, pdf, renderScale, shouldRender, width }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -205,7 +271,7 @@ function PdfPageSurface({ height, pageNumber, pdf, shouldRender, width }) {
         return;
       }
 
-      const viewport = page.getViewport({ scale: PAGE_SCALE });
+      const viewport = page.getViewport({ scale: renderScale });
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       canvas.width = viewport.width;
@@ -222,7 +288,7 @@ function PdfPageSurface({ height, pageNumber, pdf, shouldRender, width }) {
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [pageNumber, pdf, shouldRender]);
+  }, [pageNumber, pdf, renderScale, shouldRender]);
 
   return shouldRender ? (
     <canvas
@@ -236,7 +302,7 @@ function PdfPageSurface({ height, pageNumber, pdf, shouldRender, width }) {
   );
 }
 
-function PdfTextLayer({ pageNumber, pdf, shouldRender }) {
+function PdfTextLayer({ pageNumber, pdf, renderScale, shouldRender }) {
   const layerRef = useRef(null);
 
   useEffect(() => {
@@ -253,7 +319,7 @@ function PdfTextLayer({ pageNumber, pdf, shouldRender }) {
         return;
       }
 
-      const viewport = page.getViewport({ scale: PAGE_SCALE });
+      const viewport = page.getViewport({ scale: renderScale });
       const textContent = await page.getTextContent();
       if (cancelled || !layerRef.current) {
         return;
@@ -278,12 +344,12 @@ function PdfTextLayer({ pageNumber, pdf, shouldRender }) {
       textLayer?.cancel();
       layerRef.current?.replaceChildren();
     };
-  }, [pageNumber, pdf, shouldRender]);
+  }, [pageNumber, pdf, renderScale, shouldRender]);
 
   return shouldRender ? <div className="pdf-text-layer" ref={layerRef} /> : null;
 }
 
-function PdfOverlayLayer({ cursorPoint, overlays, pageHeight, pageWidth, shouldRender, visibleRepresentations }) {
+function PdfOverlayLayer({ cursorPoint, overlays, pageHeight, pageWidth, representationSettingsMap, shouldRender, visibleRepresentations }) {
   if (!shouldRender) {
     return null;
   }
@@ -323,6 +389,7 @@ function PdfOverlayLayer({ cursorPoint, overlays, pageHeight, pageWidth, shouldR
                 <OverlayRepresentation
                   key={`${overlay.overlayId}:${representation.kind}`}
                   representation={representation}
+                  representationSettingsMap={representationSettingsMap}
                 />
               ))}
             </div>
@@ -333,9 +400,9 @@ function PdfOverlayLayer({ cursorPoint, overlays, pageHeight, pageWidth, shouldR
   );
 }
 
-function OverlayRepresentation({ representation }) {
+function OverlayRepresentation({ representation, representationSettingsMap }) {
   if (representation.kind === 'keywords') {
-    return <KeywordRepresentation representation={representation} />;
+    return <KeywordRepresentation representation={representation} representationSettingsMap={representationSettingsMap} />;
   }
 
   const content = renderRepresentation(representation);
@@ -344,20 +411,26 @@ function OverlayRepresentation({ representation }) {
   }
 
   return (
-    <span className={`overlay-badge overlay-badge-${representation.kind}`}>
+    <span
+      className={`overlay-badge overlay-badge-${cssSafeKind(representation.kind)}`}
+      style={{ backgroundColor: representationBackground(representation, representationSettingsMap) }}
+    >
       {content}
     </span>
   );
 }
 
-function KeywordRepresentation({ representation }) {
-  const keywords = (representation.items ?? []).filter(Boolean);
+function KeywordRepresentation({ representation, representationSettingsMap }) {
+  const keywords = (representation.items?.length ? representation.items : String(representation.value ?? '').split(',')).map((item) => item.trim()).filter(Boolean);
   if (!keywords.length) {
     return null;
   }
 
   return (
-    <span className="overlay-badge overlay-badge-keywords">
+    <span
+      className="overlay-badge overlay-badge-keywords"
+      style={{ '--overlay-representation-background': representationBackground(representation, representationSettingsMap) }}
+    >
       {keywords.map((keyword, index) => (
         <span className="overlay-keyword" key={`${keyword}:${index}`}>
           {keyword}
@@ -368,6 +441,10 @@ function KeywordRepresentation({ representation }) {
 }
 
 function renderRepresentation(representation) {
+  if (representation.value) {
+    return representation.value;
+  }
+
   if (representation.text) {
     return representation.text;
   }
@@ -384,6 +461,7 @@ function buildOverlayTypographyStyle({ height, representations, width }) {
     return {};
   }
 
+  const hasBlockLabel = representations.some((representation) => representation.kind === 'block-label');
   const typography = chooseOverlayTypography({
     height: Math.max(height - 4, 1),
     representations,
@@ -398,9 +476,10 @@ function buildOverlayTypographyStyle({ height, representations, width }) {
     '--overlay-keyword-gap': `${roundCssPx(Math.max(2, typography.fontSize * 0.3))}px`,
     '--overlay-keyword-padding-x': `${roundCssPx(Math.max(4, typography.fontSize * 0.5))}px`,
     '--overlay-keyword-padding-y': `${roundCssPx(Math.max(2, typography.fontSize * 0.2))}px`,
-    '--overlay-stack-gap': `${roundCssPx(Math.max(2, typography.fontSize * 0.38))}px`,
     '--overlay-summary-font-size': `${roundCssPx(typography.fontSize)}px`,
     '--overlay-summary-lines': String(typography.summaryLines),
+    '--overlay-block-label-font-size': `${roundCssPx(Math.max(6.5, Math.min(10, typography.fontSize * 0.78)))}px`,
+    '--overlay-stack-gap': `${roundCssPx(Math.max(hasBlockLabel ? 1 : 2, typography.fontSize * (hasBlockLabel ? 0.2 : 0.38)))}px`,
   };
 }
 
@@ -435,9 +514,7 @@ function measureVisibleRepresentations(representations, fontSize, width) {
   const stackGap = Math.max(2, fontSize * 0.38);
 
   for (const representation of representations) {
-    const footprint = representation.kind === 'keywords'
-      ? measureKeywordFootprint(representation.items ?? [], fontSize, width)
-      : measureTextBadgeFootprint(renderRepresentation(representation), fontSize, width);
+    const footprint = measureRepresentationFootprint(representation, fontSize, width);
     if (!footprint.height) {
       continue;
     }
@@ -448,7 +525,7 @@ function measureVisibleRepresentations(representations, fontSize, width) {
     height += footprint.height;
     renderedCount += 1;
 
-    if (representation.kind !== 'keywords') {
+    if (!['keywords', 'block-label'].includes(representation.kind)) {
       summaryLines = footprint.lines;
     }
   }
@@ -456,7 +533,17 @@ function measureVisibleRepresentations(representations, fontSize, width) {
   return { height, summaryLines };
 }
 
-function measureTextBadgeFootprint(text, fontSize, width) {
+function measureRepresentationFootprint(representation, fontSize, width) {
+  if (representation.kind === 'keywords') {
+    return measureKeywordFootprint(representation.items ?? [], fontSize, width);
+  }
+  if (representation.kind === 'block-label') {
+    return measureTextBadgeFootprint(renderRepresentation(representation), Math.max(6.5, fontSize * 0.78), width, 1);
+  }
+  return measureTextBadgeFootprint(renderRepresentation(representation), fontSize, width);
+}
+
+function measureTextBadgeFootprint(text, fontSize, width, maxLines = 3) {
   if (!text) {
     return { height: 0, lines: 1 };
   }
@@ -466,7 +553,7 @@ function measureTextBadgeFootprint(text, fontSize, width) {
   const availableWidth = Math.max(width - paddingX * 2, 8);
   const lineHeight = fontSize * 1.35;
   const estimatedLines = Math.ceil(String(text).length * fontSize * 0.52 / availableWidth);
-  const lines = Math.max(1, Math.min(3, estimatedLines));
+  const lines = Math.max(1, Math.min(maxLines, estimatedLines));
   return {
     height: lines * lineHeight + paddingY * 2,
     lines,
@@ -504,6 +591,50 @@ function measureKeywordFootprint(items, fontSize, width) {
 
 function roundCssPx(value) {
   return Math.round(value * 100) / 100;
+}
+
+function buildRepresentationSettingsMap(settings) {
+  const map = new Map();
+  for (const setting of settings ?? []) {
+    map.set(setting.name, setting);
+    if (setting.id) {
+      map.set(setting.id, setting);
+    }
+  }
+  return map;
+}
+
+function representationBackground(representation, settingsMap) {
+  const setting = settingsMap.get(representation.kind);
+  const color = setting?.background_color
+    ?? representation.background_color
+    ?? '#263238';
+  const opacity = setting?.background_opacity
+    ?? representation.background_opacity
+    ?? 1;
+  return colorWithOpacity(color, opacity);
+}
+
+function colorWithOpacity(color, opacity) {
+  const alpha = Math.min(Math.max(Number(opacity), 0), 1);
+  const hex = String(color || '').trim();
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!match) {
+    return color || '#263238';
+  }
+  const [, red, green, blue] = match;
+  return `rgba(${parseInt(red, 16)}, ${parseInt(green, 16)}, ${parseInt(blue, 16)}, ${alpha})`;
+}
+
+function clampZoom(value) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(Math.max(Number(value), ZOOM_MIN), ZOOM_MAX);
+}
+
+function cssSafeKind(kind) {
+  return String(kind).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'representation';
 }
 
 function getOverlayOpacity(overlay, cursorPoint, pageWidth, pageHeight) {

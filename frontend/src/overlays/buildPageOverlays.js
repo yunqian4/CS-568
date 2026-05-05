@@ -47,7 +47,10 @@ export function buildOverlayState(document) {
 
     chunks.forEach((chunk) => {
       const chunkId = chunk.chunk_id;
-      const representations = representationAssignments.get(chunkId) ?? [];
+      const representations = [
+        buildBlockLabelRepresentation(block, chunk),
+        ...(representationAssignments.get(chunkId) ?? []),
+      ];
 
       const pageOverlays = overlaysByPageNumber.get(chunk.page_number) ?? [];
       pageOverlays.push({
@@ -75,4 +78,15 @@ export function buildOverlayState(document) {
   }
 
   return { blockCountByPageNumber, overlaysByPageNumber };
+}
+
+function buildBlockLabelRepresentation(block, chunk) {
+  return {
+    kind: 'block-label',
+    label: 'Block',
+    value: `${block.block_id} | ${chunk.chunk_id}`,
+    background_color: '#234b65',
+    background_opacity: 0.6,
+    text: `${block.block_id} | ${chunk.chunk_id}`,
+  };
 }
