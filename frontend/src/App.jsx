@@ -120,7 +120,7 @@ export default function App() {
     await submitDocument(
       `/api/documents/upload?provider=${encodeURIComponent(provider)}`,
       { body, method: 'POST' },
-      { quizMode: Boolean(representationOptions.quizMode), apiKey: representationOptions.apiKey },
+      { quizMode: Boolean(representationOptions.quizMode), apiKey: representationOptions.apiKey, quizRepresentationChoice: representationOptions.quizRepresentationChoice },
     );
   }
 
@@ -139,7 +139,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       },
-      { quizMode: Boolean(representationOptions.quizMode), apiKey: representationOptions.apiKey },
+      { quizMode: Boolean(representationOptions.quizMode), apiKey: representationOptions.apiKey, quizRepresentationChoice: representationOptions.quizRepresentationChoice },
     );
   }
 
@@ -238,7 +238,10 @@ export default function App() {
       }
 
       if (options.quizMode) {
-        const rep = ['keywords', 'summary'][Math.floor(Math.random() * 2)];
+        const choice = options.quizRepresentationChoice;
+        const rep = choice === 'keywords' || choice === 'summary'
+          ? choice
+          : ['keywords', 'summary'][Math.floor(Math.random() * 2)];
         const provider = payload.provider ?? payload.metadata?.provider ?? 'opendataloader';
 
         let questions = [];

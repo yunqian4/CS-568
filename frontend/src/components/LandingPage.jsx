@@ -6,6 +6,7 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
   const [provider, setProvider] = useState('opendataloader');
   const [llmEnabled, setLlmEnabled] = useState(true);
   const [quizMode, setQuizMode] = useState(false);
+  const [quizRepresentationChoice, setQuizRepresentationChoice] = useState('random');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [keywordMinWords, setKeywordMinWords] = useState('20');
@@ -51,6 +52,7 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
       maxKeywords,
       model,
       quizMode,
+      quizRepresentationChoice,
       summaryMinWords,
       summaryWordRatio,
     };
@@ -209,8 +211,33 @@ export default function LandingPage({ errorMessage, isSubmitting, onUploadSubmit
               />
               <span>Quiz Mode</span>
             </label>
+            {quizMode && (
+              <div className="quiz-representation-choice">
+                <span className="field-label" style={{ fontSize: '0.8rem', marginBottom: '4px', display: 'block' }}>Representation</span>
+                {[
+                  { value: 'random', label: 'Random' },
+                  { value: 'keywords', label: 'Keywords' },
+                  { value: 'summary', label: 'Summary' },
+                ].map(({ value, label }) => (
+                  <label key={value} className="inline-control" style={{ marginBottom: '2px' }}>
+                    <input
+                      checked={quizRepresentationChoice === value}
+                      name="quiz-representation"
+                      onChange={() => setQuizRepresentationChoice(value)}
+                      type="radio"
+                      value={value}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
             <span className="field-hint">
-              Starts a stopwatch and generates 3 comprehension questions. A representation is randomly assigned for the study.
+              {quizMode
+                ? quizRepresentationChoice === 'random'
+                  ? 'Starts a stopwatch and generates 3 comprehension questions. Representation is randomly assigned.'
+                  : `Starts a stopwatch and generates 3 comprehension questions. Shows ${quizRepresentationChoice} representation.`
+                : 'Starts a stopwatch and generates 3 comprehension questions.'}
             </span>
           </fieldset>
 

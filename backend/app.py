@@ -187,7 +187,18 @@ async def generate_quiz(document_id: str, payload: QuizRequest) -> dict[str, obj
     document_json_path = document_dir / "providers" / provider / DOCUMENT_JSON_NAME
 
     if not document_json_path.exists():
-        raise HTTPException(status_code=404, detail="Document not found.")
+        # Fall back to any available provider's document.json so the quiz
+        # works even when the frontend sends the wrong provider name (e.g.
+        # after a failed opendataloader upload followed by a native retry).
+        providers_dir = document_dir / "providers"
+        if providers_dir.exists():
+            for sub in sorted(providers_dir.iterdir()):
+                candidate = sub / DOCUMENT_JSON_NAME
+                if sub.is_dir() and candidate.exists():
+                    document_json_path = candidate
+                    break
+        if not document_json_path.exists():
+            raise HTTPException(status_code=404, detail="Document not found.")
 
     doc_data = _read_json(document_json_path)
     blocks = doc_data.get("blocks") if isinstance(doc_data.get("blocks"), list) else []
