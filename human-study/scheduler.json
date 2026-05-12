@@ -1,0 +1,13 @@
+{
+  "strategy": "weighted_random",
+  "exam_settings": [
+    {
+      "exam_id": "wikiworkshop-keywords-example",
+      "weight": 1
+    },
+    {
+      "exam_id": "wikiworkshop-summary-example",
+      "weight": 1
+    }
+  ]
+}

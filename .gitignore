@@ -12,3 +12,5 @@ backend/pdfreader_backend.egg-info/
 backend/dev/docling-artifacts/
 dev/storage/
 frontend/.codex-vite-*.log
+study/private-r2/
+human-study/private-r2/

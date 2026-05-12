@@ -23,6 +23,7 @@ export default function ReaderPage({
   quizMode = false,
   quizPanel = null,
   representationSettings,
+  resetLabel = 'Import another PDF',
   settingsMessage,
 }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -71,7 +72,7 @@ export default function ReaderPage({
         </div>
 
         <button className="secondary-button" onClick={onReset} type="button">
-          Import another PDF
+          {resetLabel}
         </button>
       </header>
 

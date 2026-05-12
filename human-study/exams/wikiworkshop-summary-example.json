@@ -1,0 +1,81 @@
+{
+  "id": "wikiworkshop-summary-example",
+  "title": "WikiWorkshop Summary Example",
+  "enabled": true,
+  "document_id": "wikiworkshop-2025",
+  "question_set_id": "wikiworkshop-2025-summary",
+  "time_limit_seconds": 900,
+  "representation_condition": {
+    "id": "summary",
+    "label": "Summary",
+    "visible_representations": [
+      "summary"
+    ]
+  },
+  "questions": [
+    {
+      "id": "wiki-summary-q1",
+      "text": "Which technology is emphasized in the paper?",
+      "choices": [
+        "Virtual reality headsets",
+        "Blockchain ledgers",
+        "Generative AI and large language models",
+        "Quantum processors",
+        "Desktop publishing software"
+      ],
+      "answer_index": 2
+    },
+    {
+      "id": "wiki-summary-q2",
+      "text": "What community context does the paper discuss?",
+      "choices": [
+        "Clinical diagnosis",
+        "Wikimedia peer production",
+        "Weather forecasting",
+        "Satellite imaging",
+        "Music recommendation"
+      ],
+      "answer_index": 1
+    },
+    {
+      "id": "wiki-summary-q3",
+      "text": "What tradeoff does the paper highlight?",
+      "choices": [
+        "Replace all editors",
+        "Remove citations",
+        "Ban summaries",
+        "Ignore governance",
+        "Balance productivity with quality risks"
+      ],
+      "answer_index": 4
+    }
+  ],
+  "questionnaires": {
+    "pre": [
+      {
+        "id": "familiarity",
+        "label": "I am familiar with the reading topic.",
+        "type": "likert",
+        "min": 1,
+        "max": 5,
+        "required": true
+      }
+    ],
+    "post": [
+      {
+        "id": "representation_helpful",
+        "label": "The displayed reading support was helpful.",
+        "type": "likert",
+        "min": 1,
+        "max": 5,
+        "required": true
+      },
+      {
+        "id": "comments",
+        "label": "Optional comments",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  }
+}

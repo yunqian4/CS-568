@@ -1,0 +1,153 @@
+{
+  "chunks": [
+    {
+      "bbox": {
+        "height": 0.01409343434343435,
+        "width": 0.6436993464052287,
+        "x": 0.17869444444444446,
+        "y": 0.9387335858585859
+      },
+      "chunk_id": "opendataloader-002-0013",
+      "heading_level": 4,
+      "page_number": 2,
+      "reading_order": 30,
+      "text": "\u00a9 Copyright held by the owner/author(s), published under Creative Commons CC BY 4.0 License",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.014093434343434387,
+        "width": 0.3277222222222222,
+        "x": 0.33669934640522875,
+        "y": 0.04630934343434345
+      },
+      "chunk_id": "opendataloader-003-0001",
+      "heading_level": 4,
+      "page_number": 3,
+      "reading_order": 31,
+      "text": "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.016108585858585905,
+        "width": 0.08762581699346406,
+        "x": 0.08872385620915033,
+        "y": 0.09196085858585856
+      },
+      "chunk_id": "opendataloader-003-0002",
+      "heading_level": 3,
+      "page_number": 3,
+      "reading_order": 32,
+      "text": "References",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.06409343434343441,
+        "width": 0.39208333333333334,
+        "x": 0.08872385620915033,
+        "y": 0.10843055555555547
+      },
+      "chunk_id": "opendataloader-003-0003",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 33,
+      "text": "Frost-Arnold, Karen. 2021. \u201cThe Epistemic Dangers of Context Collapse Online.\u201d In Applied Epistemology, edited by Jennifer Lackey, 0. Oxford University Press. https://doi.org/10.1093/oso/9780198833659.003.0018.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.047729797979798004,
+        "width": 0.3943202614379085,
+        "x": 0.08872385620915033,
+        "y": 0.17509722222222224
+      },
+      "chunk_id": "opendataloader-003-0004",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 34,
+      "text": "Harley, Kelsey, and Rodney Cooper. 2022. \u201cInformation Integrity: Are We There Yet?\u201d ACM Computing Surveys 54 (2): 1\u201335. https://doi.org/10.1145/3436817.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.014093434343434243,
+        "width": 0.3903986928104575,
+        "x": 0.08872385620915033,
+        "y": 0.22540025252525264
+      },
+      "chunk_id": "opendataloader-003-0005",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 35,
+      "text": "Vetter, Matthew A., Jialei Jiang, and Zachary J. McDowell.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.04742676767676769,
+        "width": 0.3516470588235295,
+        "x": 0.12352777777777778,
+        "y": 0.24206691919191914
+      },
+      "chunk_id": "opendataloader-003-0006",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 36,
+      "text": "2025. \u201cAn Endangered Species: How LLMs Threaten Wikipedia\u2019s Sustainability.\u201d AI & Society, February. https://doi.org/10.1007/s00146-025-02199-9.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.04742676767676769,
+        "width": 0.3798513071895424,
+        "x": 0.08872385620915033,
+        "y": 0.2920669191919192
+      },
+      "chunk_id": "opendataloader-003-0007",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 37,
+      "text": "Watson, Lani. 2021. The Right to Know: Epistemic Rights and Why We Need Them. London: Routledge. https://doi.org/10.4324/9780429438912.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.16439646464646465,
+        "width": 0.3788807189542483,
+        "x": 0.08872385620915033,
+        "y": 0.3420669191919192
+      },
+      "chunk_id": "opendataloader-003-0008",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 38,
+      "text": "Yadav, Kamya, and Samantha Lai. 2024. \u201cWhat Does Information Integrity Mean for Democracies?\u201d Lawfare, March. https://www.lawfaremedia.org/article/what-doesinformation-integrity-mean-for-democracies. Zia, Leila, Isaac Johnson, Bahodir Mansurov, Jonathan Morgan, Miriam Redi, Diego Saez-Trumper, and Dario Tarborelli. 2019. \u201cKnowledge Integrity: Wikimedia Research 2030.\u201d Wikimedia Foundation. https://doi.org/10.6084/m9.figshare.7704626.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.01409343434343435,
+        "width": 0.6436993464052287,
+        "x": 0.17869444444444446,
+        "y": 0.9387335858585859
+      },
+      "chunk_id": "opendataloader-003-0009",
+      "heading_level": 4,
+      "page_number": 3,
+      "reading_order": 39,
+      "text": "\u00a9 Copyright held by the owner/author(s), published under Creative Commons CC BY 4.0 License",
+      "type": "heading"
+    }
+  ],
+  "title": "WikiWorkshop2025",
+  "window": {
+    "count": 4,
+    "index": 4,
+    "previous_section_path": [
+      "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+      "Discussion/Conclusions"
+    ]
+  }
+}

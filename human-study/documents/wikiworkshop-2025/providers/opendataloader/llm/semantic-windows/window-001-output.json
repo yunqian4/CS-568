@@ -1,0 +1,76 @@
+{
+  "ignored_chunk_ids": [
+    "opendataloader-001-0001",
+    "opendataloader-001-0003",
+    "opendataloader-001-0004"
+  ],
+  "paragraphs": [
+    {
+      "chunk_ids": [
+        "opendataloader-001-0006"
+      ],
+      "paragraph_id": "paragraph-0001-opendataloader-001-0006",
+      "role": "paragraph",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Introduction"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0007"
+      ],
+      "paragraph_id": "paragraph-0002-opendataloader-001-0007",
+      "role": "paragraph",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Introduction"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0008"
+      ],
+      "paragraph_id": "paragraph-0003-opendataloader-001-0008",
+      "role": "paragraph",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Introduction"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0009"
+      ],
+      "paragraph_id": "paragraph-0004-opendataloader-001-0009",
+      "role": "paragraph",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Introduction"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0010"
+      ],
+      "paragraph_id": "paragraph-0005-opendataloader-001-0010",
+      "role": "paragraph",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Introduction"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0012"
+      ],
+      "paragraph_id": "paragraph-0006-opendataloader-001-0012",
+      "role": "paragraph",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Methods"
+      ]
+    }
+  ],
+  "title": "WikiWorkshop2025"
+}

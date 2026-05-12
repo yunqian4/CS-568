@@ -11,6 +11,8 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
   - remote PDF URL import
   - parser/provider choice between `opendataloader`, `native`, `docling`, and `grobid`
   - optional LLM-generated keywords and summaries
+- The `/study` route supports controlled cached tests for static Cloudflare Pages deployments.
+- Cached tests use `human-study/` as the designer workspace for PDFs, editable parsed document JSON, generated representations, exam settings, global scheduler settings, public question JSON without answer keys, and private R2 answer keys.
 - The backend parser is a replaceable module with multiple provider options.
 - Uploaded or imported PDFs are stored in content-addressed folders under `dat/temp/<sha256>/`.
 - The file hash is the stable document id and storage directory name.
@@ -42,6 +44,9 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - A modular mapping rule determines which block drives which overlay and which representation is shown in that overlay.
 - Paragraph-level chunking is the target granularity.
 - The UI should favor responsive scrolling and avoid blur-heavy visuals.
+- Study participants receive an anonymous browser participant id and a scheduler-driven assignment to one exported exam setting.
+- Study flow is pre-questionnaire, cached reader plus exam, post-questionnaire, then result submission.
+- Study submissions are scored by a Pages Function and written as immutable JSON objects to R2.
 
 ## Implemented Decisions
 
@@ -126,6 +131,15 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Keyword chips should become more transparent as the cursor approaches a chunk and disappear when the cursor is inside the chunk box.
 - Rendering should prefer lazy visible-page behavior instead of eager full-document rasterization.
 - A real PDF text layer is the intended mechanism for selection and copy inside the reader.
+- Cached-study assets are exported by `scripts/export_study_cache.py` into `frontend/public/study-cache/`.
+- Individual PDFs can be prepared through staged `human-study/scripts`: extraction/paragraph segmentation first, editable representation generation second, and Cloudflare export third.
+- Editable intermediates live under `human-study/documents/<document-id>/` as `chunks.json`, `paragraphs.json`, `document.json`, and generated representation files.
+- The exporter merges completed cached representation files into `document.json`, rewrites `pdf_url` to the static study-cache PDF path, and emits public question files without `answer_index`.
+- The exporter emits private R2 answer-key files under ignored `study/private-r2/study-private/answer-keys/`.
+- Cloudflare Pages Functions under `functions/api/study/` provide `POST /api/study/score-submit` for server-side scoring and R2 result writes plus `GET /api/study/health` for binding checks.
+- `wrangler.toml` defines the Pages build output and the `STUDY_RESULTS` R2 binding used by the study Functions.
+- `run-test.bat` runs the `human-study` Cloudflare exporter, builds the frontend, and starts a local Cloudflare Pages preview for `/study`.
+- `human-eval.md` documents the operational workflow for adding PDFs, editing intermediates, creating exam settings, configuring the scheduler, exporting static assets, uploading private R2 answer keys, and deploying the study.
 
 ## Known Open Work
 
@@ -151,11 +165,18 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Formalize the "perfect pipeline" target: parser semantic elements -> normalized semantic chunks -> zoomable section tree -> paragraph blocks -> source chunk overlays -> fit-based representation placement per block.
 - Add an explicit revocation/deletion API when the app needs to remove `dat/temp/<sha256>/` artifacts.
 - Backend packaging still needs cleanup if editable installs are expected; `pip install -e .` currently fails due package discovery.
+- Add a richer authoring workflow for study questions after the first cached-study pilot.
+- Add a result-export helper for downloading R2 study submissions into CSV or JSONL.
+- Move cached PDFs from Pages static assets to R2 if any study PDF exceeds the 25 MiB Cloudflare Pages asset limit.
 
 ## Acceptance Criteria
 
 - Users can import PDFs by file or URL and enter the reader after confirmation.
 - The frontend defaults to OpenDataLoader with LLM semantic grouping enabled.
+- `/study` loads only static cached assets and does not call FastAPI document import, representation polling, OpenDataLoader, Java, or OpenAI.
+- Public study question files do not contain answer keys.
+- Study answer keys are available only through the `STUDY_RESULTS` R2 binding.
+- Study submissions are scored server-side and written to R2 as one JSON object per session.
 - Users can choose between `opendataloader`, `native`, and `docling` parsing paths.
 - Users can choose the `grobid` parsing path when a local GROBID service is available or backend-managed startup is enabled.
 - Users can choose the `opendataloader` parsing path when Java 11+ and `opendataloader-pdf` are installed.

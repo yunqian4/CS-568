@@ -139,6 +139,70 @@ cd CS-568\frontend
 npm run build
 ```
 
+## Human Study Deployment
+
+The `/study` route is designed for Cloudflare Pages deployments without the FastAPI backend. All study preparation lives under `human-study/`: PDFs, editable intermediate files, exam settings, scheduler, export scripts, and private R2 answer keys.
+
+Add a PDF:
+
+```powershell
+mkdir human-study\pdfs\my-paper
+Copy-Item path\to\paper.pdf human-study\pdfs\my-paper\source.pdf
+```
+
+Extract editable chunks and paragraphs:
+
+```powershell
+backend\.venv\Scripts\python.exe human-study\scripts\1_extract_document.py --document my-paper
+```
+
+Generate editable representations:
+
+```powershell
+backend\.venv\Scripts\python.exe human-study\scripts\2_generate_representations.py --document my-paper
+```
+
+Edit exam settings in `human-study\exams\` and participant assignment in `human-study\scheduler.json`, then export the static study cache:
+
+```powershell
+backend\.venv\Scripts\python.exe human-study\scripts\3_export_cloudflare.py
+```
+
+This writes public assets under `frontend\public\study-cache\` and private R2 answer keys under `human-study\private-r2\`.
+
+See `human-eval.md` for the complete test creation and deployment workflow.
+
+Build the frontend:
+
+```powershell
+cd frontend
+npm.cmd run build
+```
+
+Preview the Pages deployment from the repo root:
+
+```powershell
+npx wrangler pages dev frontend/dist
+```
+
+Or run the cached-study export, frontend build, and local Pages preview together:
+
+```powershell
+run-test.bat
+```
+
+Configure an R2 binding named `STUDY_RESULTS`. Upload private answer keys before running a study:
+
+```powershell
+npx wrangler r2 object put pdfreader-study-results/study-private/answer-keys/wikiworkshop-2025-keywords.json --file human-study/private-r2/study-private/answer-keys/wikiworkshop-2025-keywords.json
+```
+
+Participant submissions are written to:
+
+```text
+study-results/<study_id>/<yyyy-mm-dd>/<session_id>.json
+```
+
 ## Common Issues
 
 If OpenDataLoader fails, check Java:

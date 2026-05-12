@@ -1,0 +1,38 @@
+{
+  "question_set_id": "wikiworkshop-2025-keywords",
+  "questions": [
+    {
+      "choices": [
+        "Virtual reality headsets",
+        "Blockchain ledgers",
+        "Generative AI and large language models",
+        "Quantum processors",
+        "Desktop publishing software"
+      ],
+      "id": "wiki-keywords-q1",
+      "text": "Which technology is emphasized in the paper?"
+    },
+    {
+      "choices": [
+        "Clinical diagnosis",
+        "Wikimedia peer production",
+        "Weather forecasting",
+        "Satellite imaging",
+        "Music recommendation"
+      ],
+      "id": "wiki-keywords-q2",
+      "text": "What community context does the paper discuss?"
+    },
+    {
+      "choices": [
+        "Replace all editors",
+        "Remove citations",
+        "Ban summaries",
+        "Ignore governance",
+        "Balance productivity with quality risks"
+      ],
+      "id": "wiki-keywords-q3",
+      "text": "What tradeoff does the paper highlight?"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "block_id": "paragraph-0001-opendataloader-001-0006",
+  "kind": "keywords",
+  "representation": {
+    "background_color": "#7a4a12",
+    "background_opacity": 1.0,
+    "items": [
+      "Generative AI",
+      "Large Language Models (LLMs)",
+      "multimodal models (MMMs)",
+      "Wikidata content",
+      "Wikipedia's peer-production system"
+    ],
+    "kind": "keywords",
+    "label": "Keywords",
+    "text": null,
+    "value": "Generative AI, Large Language Models (LLMs), multimodal models (MMMs), Wikidata content, Wikipedia's peer-production system"
+  },
+  "updated_at": "2026-05-06T01:10:30.245659+00:00"
+}

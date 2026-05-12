@@ -1,0 +1,97 @@
+{
+  "chunks": [
+    {
+      "bbox": {
+        "height": 0.15924494949494952,
+        "width": 0.3973986928104575,
+        "x": 0.5149983660130718,
+        "y": 0.2229760101010101
+      },
+      "chunk_id": "opendataloader-001-0013",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 12,
+      "text": "practitioners\u2019 own understandings, analysing on-wiki discussions and conducting interviews and focus groups with Wikimedians, with an emphasis on Wikipedia policy and practice. Phase 1 data came from internal discussions between editors in public online forums such as the \u201cVillage Pump\u201d, as well as the Wikimedia online periodical, the \u201cSignpost\u201d and the Wikimedia blog, \u201cDiff\u201d. Data covered material posted from July 2022 to July 2023. Over 160,000 words of content were coded across 88 articles, blogs, and discussions, using an inductive and emergent qualitative analysis to identify critical themes.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.2610631313131313,
+        "width": 0.39732516339869284,
+        "x": 0.5149983660130718,
+        "y": 0.38267297979797976
+      },
+      "chunk_id": "opendataloader-001-0014",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 13,
+      "text": "We supplemented this text-based data through semistructured interviews and two focus groups. The interview cohort (n=16) was selected using purposive sampling, and included active members of the on-wiki discussions identified in the initial data analysis as well as Wikimedia researchers involved in the Knowledge Integrity project. The focus groups comprised a more broadly representative group of Wikimedians including culturally and linguistically diverse attendees at Wikimania 2023 in Singapore who were approached to participate after demonstrating interest in the impacts of genAI in Wikimania sessions. Instead of asking participants questions specifically about knowledge integrity, we asked more general questions about the benefits and challenges of genAI for Wikipedia in semi-structured interviews led by participants\u2019 own understandings of the issues. We then mapped those results to concepts and themes related to knowledge integrity from the literature (Harley and Cooper 2022; Yadav and Lai 2024).",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.028638888888888908,
+        "width": 0.39719607843137267,
+        "x": 0.5149983660130718,
+        "y": 0.6441881313131312
+      },
+      "chunk_id": "opendataloader-001-0015",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 14,
+      "text": "The project received ethics approval at the University of Technology Sydney (ETH21-5787-23-3).",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.016779040404040386,
+        "width": 0.06100326797385622,
+        "x": 0.5149983660130718,
+        "y": 0.6889974747474747
+      },
+      "chunk_id": "opendataloader-001-0016",
+      "heading_level": 2,
+      "page_number": 1,
+      "reading_order": 15,
+      "text": "Results",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.18833585858585855,
+        "width": 0.39727450980392165,
+        "x": 0.5149983660130718,
+        "y": 0.7087335858585859
+      },
+      "chunk_id": "opendataloader-001-0017",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 16,
+      "text": "RQ1 In interviews and focus groups, editors discussed benefits of genAI tools relating to improving productivity and expanding the scope of content across languages and in different formats. When asked about challenges, editors talked about risks both internal and external to Wikipedia. Internally, editors were concerned about the proliferation of AI-generated misinformation or biased content because of the difficulty in fact-checking and verifying AI outputs. Some worried AI-generated content could overwhelm human-inthe-loop curation processes even where it was detected. There was also concern about the uneven distribution of risk because genAI tools are not available for all languages and because low editor numbers in smaller versions could tip the",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.01409343434343435,
+        "width": 0.6436993464052287,
+        "x": 0.17869444444444446,
+        "y": 0.9387335858585859
+      },
+      "chunk_id": "opendataloader-001-0018",
+      "heading_level": 4,
+      "page_number": 1,
+      "reading_order": 17,
+      "text": "\u00a9 Copyright held by the owner/author(s), published under Creative Commons CC BY 4.0 License",
+      "type": "heading"
+    }
+  ],
+  "title": "WikiWorkshop2025",
+  "window": {
+    "count": 4,
+    "index": 2,
+    "previous_section_path": [
+      "Implications of generative AI for knowledge integrity on Wikipedia",
+      "Methods"
+    ]
+  }
+}

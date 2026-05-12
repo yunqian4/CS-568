@@ -1,0 +1,8 @@
+name = "pdfreader-study"
+compatibility_date = "2026-05-10"
+pages_build_output_dir = "frontend/dist"
+
+[[r2_buckets]]
+binding = "STUDY_RESULTS"
+bucket_name = "pdfreader-study-results"
+preview_bucket_name = "pdfreader-study-results-preview"

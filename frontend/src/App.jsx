@@ -3,6 +3,7 @@ import LandingPage from './components/LandingPage';
 import QuizPanel from './components/QuizPanel';
 import ReaderPage from './components/ReaderPage';
 import ResultsPage from './components/ResultsPage';
+import StudyPage from './components/StudyPage';
 import {
   clearCookieRepresentationSettings,
   readCookieRepresentationSettings,
@@ -16,6 +17,10 @@ import {
 function getRouteDocumentId() {
   const match = window.location.pathname.match(/^\/reader\/([^/]+)$/);
   return match ? match[1] : null;
+}
+
+function isStudyRoute() {
+  return window.location.pathname === '/study' || window.location.pathname.startsWith('/study/');
 }
 
 export default function App() {
@@ -32,6 +37,7 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizFetchError, setQuizFetchError] = useState('');
   const routeDocumentId = useMemo(getRouteDocumentId, [window.location.pathname]);
+  const studyRoute = useMemo(isStudyRoute, [window.location.pathname]);
   const reportedRepresentationFailuresRef = useRef(new Set());
 
   useEffect(() => {
@@ -304,6 +310,10 @@ export default function App() {
   const activeRepresentationSettings = quizMode && quizRepresentation
     ? representationSettings.map((s) => ({ ...s, enabled: s.id === quizRepresentation }))
     : representationSettings;
+
+  if (studyRoute) {
+    return <StudyPage />;
+  }
 
   if (quizResults && documentData) {
     return (

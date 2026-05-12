@@ -1,0 +1,53 @@
+{
+  "ignored_chunk_ids": [
+    "opendataloader-001-0018"
+  ],
+  "paragraphs": [
+    {
+      "chunk_ids": [
+        "opendataloader-001-0013"
+      ],
+      "paragraph_id": "paragraph-0007-paragraph-1",
+      "role": "body_text",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Methods"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0014"
+      ],
+      "paragraph_id": "paragraph-0008-paragraph-2",
+      "role": "body_text",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Methods"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0015"
+      ],
+      "paragraph_id": "paragraph-0009-paragraph-3",
+      "role": "body_text",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Methods"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-001-0017"
+      ],
+      "paragraph_id": "paragraph-0010-paragraph-4",
+      "role": "body_text",
+      "section_path": [
+        "Implications of generative AI for knowledge integrity on Wikipedia",
+        "Methods",
+        "Results"
+      ]
+    }
+  ],
+  "title": "WikiWorkshop2025"
+}

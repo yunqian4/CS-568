@@ -10,6 +10,12 @@
 - `frontend/src/`: React app source.
 - `frontend/src/components/`: landing page, reader page, and PDF viewer components.
 - `frontend/src/overlays/`: overlay-building logic and replaceable overlay rules.
+- `frontend/public/study-cache/`: static cached-study assets copied into the Cloudflare Pages build.
+- `functions/api/study/`: Cloudflare Pages Functions for cached-study scoring and result capture.
+- `backend/scripts/prepare_human_eval_document.py`: prepares one PDF and its generated representations from a JSON config.
+- `human-study/`: canonical designer workspace for PDFs, editable intermediates, exam JSON, scheduler JSON, staged scripts, and private R2 answer-key exports.
+- `scripts/export_study_cache.py`: compatibility wrapper for the `human-study` Cloudflare exporter.
+- `human-eval.md`: end-to-end guide for preparing and deploying human-evaluation tests.
 - `dat/temp/`: content-addressed upload/import artifact folders keyed by PDF SHA-256.
 - `backend/.env.example`: template for local backend environment defaults.
 - `.gitignore`: excludes local env files, build output, virtualenvs, dependencies, and `dat/temp`.
@@ -88,6 +94,36 @@ cd frontend
 npm.cmd run preview
 ```
 
+Extract editable text chunks and paragraph blocks for one study PDF:
+
+```powershell
+backend\.venv\Scripts\python.exe human-study\scripts\1_extract_document.py --document my-paper
+```
+
+Generate editable representations for one extracted study PDF:
+
+```powershell
+backend\.venv\Scripts\python.exe human-study\scripts\2_generate_representations.py --document my-paper
+```
+
+Export cached study assets:
+
+```powershell
+backend\.venv\Scripts\python.exe human-study\scripts\3_export_cloudflare.py
+```
+
+Cloudflare Pages local preview after building the frontend:
+
+```powershell
+npx wrangler pages dev frontend/dist
+```
+
+Cached study export, build, and local Pages preview:
+
+```powershell
+run-test.bat
+```
+
 Linting:
 
 - No dedicated lint command is configured yet.
@@ -98,6 +134,7 @@ Linting:
 - Build a web-based PDF reader modeled after the sibling `ZoomableReader` project.
 - The landing page must support either uploading a PDF or entering a PDF URL.
 - After confirmation, the app should open the web reader for that PDF.
+- The `/study` route is a controlled cached-study runner for Cloudflare Pages deployments without the FastAPI backend.
 
 ## Engineering Conventions
 
@@ -116,6 +153,7 @@ Linting:
 - Update tests when backend behavior, data contracts, or parsing behavior changes.
 - Update user-facing copy when behavior or terminology changes.
 - Update `AGENTS.md` and `PLANS.md` when requirements, architecture, commands, constraints, or open work materially change.
+- Keep answer keys out of `frontend/public/study-cache`; public question files must not include `answer_index` or equivalent correct-answer fields.
 - Call out any residual risks, missing tests, or follow-up work in the final summary.
 
 ## Backend Expectations
@@ -167,10 +205,18 @@ Linting:
 - Representation regeneration should be available for an already cached document without reparsing the PDF.
 - LLM representation metadata may be persisted, but API keys and secrets must not be persisted.
 - Keep parser selection, chunk-to-block mapping, and zoomable document construction modular so additional providers can be added without rewriting the reader contract.
+- Cached study exports are generated offline from `dat/temp/<sha256>/providers/opendataloader/document.json` and `source.pdf`; Cloudflare Pages must not run OpenDataLoader, Java, FastAPI, or live OpenAI calls.
+- The human-study scripts should use the existing backend parser and representation pipeline, keep editable intermediates under `human-study/documents/<document-id>/`, and avoid persisting request API keys in public exports.
+- Cached study result capture uses Pages Functions and an R2 binding named `STUDY_RESULTS`.
+- Study submissions should be written as one immutable JSON object under `study-results/<study_id>/<yyyy-mm-dd>/<session_id>.json` instead of appending to a shared file.
+- Private answer keys should be uploaded to R2 under `study-private/answer-keys/<question_set_id>.json`.
 
 ## Frontend Expectations
 
 - Render the PDF in a web reader.
+- Render `/study` as a separate cached-study route while preserving `/` as the upload/debug reader.
+- The study route should assign one exam setting from `frontend/public/study-cache/manifest.json` using the exported global scheduler.
+- The study route should use an anonymous browser participant id, collect pre-questionnaire responses, display the assigned cached PDF, collect exam answers, collect post-questionnaire responses, then submit to `/api/study/score-submit`.
 - The reader should support normal PDF zoom in/out controls, with canvas, text layer, and overlays scaling together.
 - Wide PDF pages should share one horizontal scroll context instead of each page having its own horizontal scrollbar.
 - Overlay visible PDF regions with modular overlay containers.
@@ -216,6 +262,8 @@ Linting:
 - Do not make the frontend call GROBID directly; all parser providers must go through the backend provider boundary.
 - Do not require LLM calls for explicitly non-LLM provider paths; generated representations must remain optional outside the default OpenDataLoader LLM pipeline.
 - Do not persist user-provided LLM API keys or expose them in returned document payloads.
+- Do not put private answer keys under `frontend/public` or any other served static asset folder.
+- Do not depend on the FastAPI `/api/documents/*` endpoints from the `/study` route.
 
 ## Done Means
 

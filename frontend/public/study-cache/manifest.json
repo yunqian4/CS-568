@@ -1,0 +1,112 @@
+{
+  "documents": [
+    {
+      "document_id": "wikiworkshop-2025",
+      "document_url": "/study-cache/documents/wikiworkshop-2025/document.json",
+      "title": "WikiWorkshop2025"
+    }
+  ],
+  "exam_settings": [
+    {
+      "document_id": "wikiworkshop-2025",
+      "id": "wikiworkshop-keywords-example",
+      "question_set_id": "wikiworkshop-2025-keywords",
+      "question_url": "/study-cache/questions/wikiworkshop-2025-keywords.json",
+      "questionnaires": {
+        "post": [
+          {
+            "id": "representation_helpful",
+            "label": "The displayed reading support was helpful.",
+            "max": 5,
+            "min": 1,
+            "required": true,
+            "type": "likert"
+          },
+          {
+            "id": "comments",
+            "label": "Optional comments",
+            "required": false,
+            "type": "textarea"
+          }
+        ],
+        "pre": [
+          {
+            "id": "familiarity",
+            "label": "I am familiar with the reading topic.",
+            "max": 5,
+            "min": 1,
+            "required": true,
+            "type": "likert"
+          }
+        ]
+      },
+      "representation_condition": {
+        "id": "keywords",
+        "label": "Keywords",
+        "visible_representations": [
+          "keywords"
+        ]
+      },
+      "time_limit_seconds": 900,
+      "title": "WikiWorkshop Keywords Example"
+    },
+    {
+      "document_id": "wikiworkshop-2025",
+      "id": "wikiworkshop-summary-example",
+      "question_set_id": "wikiworkshop-2025-summary",
+      "question_url": "/study-cache/questions/wikiworkshop-2025-summary.json",
+      "questionnaires": {
+        "post": [
+          {
+            "id": "representation_helpful",
+            "label": "The displayed reading support was helpful.",
+            "max": 5,
+            "min": 1,
+            "required": true,
+            "type": "likert"
+          },
+          {
+            "id": "comments",
+            "label": "Optional comments",
+            "required": false,
+            "type": "textarea"
+          }
+        ],
+        "pre": [
+          {
+            "id": "familiarity",
+            "label": "I am familiar with the reading topic.",
+            "max": 5,
+            "min": 1,
+            "required": true,
+            "type": "likert"
+          }
+        ]
+      },
+      "representation_condition": {
+        "id": "summary",
+        "label": "Summary",
+        "visible_representations": [
+          "summary"
+        ]
+      },
+      "time_limit_seconds": 900,
+      "title": "WikiWorkshop Summary Example"
+    }
+  ],
+  "scheduler": {
+    "exam_settings": [
+      {
+        "exam_id": "wikiworkshop-keywords-example",
+        "weight": 1
+      },
+      {
+        "exam_id": "wikiworkshop-summary-example",
+        "weight": 1
+      }
+    ],
+    "strategy": "weighted_random"
+  },
+  "study_id": "cached-pdfreader-v1",
+  "title": "Cached PDFReader Study"
+}

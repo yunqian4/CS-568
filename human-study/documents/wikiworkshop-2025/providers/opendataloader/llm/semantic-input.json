@@ -1,0 +1,565 @@
+{
+  "chunks": [
+    {
+      "bbox": {
+        "height": 0.014093434343434387,
+        "width": 0.3277222222222222,
+        "x": 0.33669934640522875,
+        "y": 0.04630934343434345
+      },
+      "chunk_id": "opendataloader-001-0001",
+      "heading_level": 4,
+      "page_number": 1,
+      "reading_order": 0,
+      "text": "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.05878787878787886,
+        "width": 0.8213218954248365,
+        "x": 0.08991176470588236,
+        "y": 0.09466792929292922
+      },
+      "chunk_id": "opendataloader-001-0002",
+      "heading_level": 1,
+      "page_number": 1,
+      "reading_order": 1,
+      "text": "Implications of generative AI for knowledge integrity on Wikipedia",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.04318434343434343,
+        "width": 0.16894117647058823,
+        "x": 0.18938562091503267,
+        "y": 0.15964267676767674
+      },
+      "chunk_id": "opendataloader-001-0003",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 2,
+      "text": "Heather Ford University of Technology Sydney",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.04318434343434343,
+        "width": 0.16894117647058823,
+        "x": 0.40955718954248366,
+        "y": 0.15964267676767674
+      },
+      "chunk_id": "opendataloader-001-0004",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 3,
+      "text": "Michael Davis University of Technology Sydney",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.016779040404040386,
+        "width": 0.10676797385620918,
+        "x": 0.08872385620915033,
+        "y": 0.22293686868686868
+      },
+      "chunk_id": "opendataloader-001-0005",
+      "heading_level": 2,
+      "page_number": 1,
+      "reading_order": 4,
+      "text": "Introduction",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.1883358585858585,
+        "width": 0.39725163398692803,
+        "x": 0.08872385620915033,
+        "y": 0.24055176767676778
+      },
+      "chunk_id": "opendataloader-001-0006",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 5,
+      "text": "Generative AI, including Large Language Models (LLMs) and multimodal models (MMMs), has captured global attention, promising great advances to knowledge. Some in the Wikimedia community have identified the possibilities of genAI for improving productivity and quality: for example, generating article drafts, summarising sources, producing transcriptions of video and more easily querying Wikidata content. Others have highlighted the risks of genAI, from polluting Wikimedia with swathes of AI-generated content to producing automated comments that simulate the appearance of discussion, debate and consensus. These may make the job of maintaining quality content difficult, violate core content policies and undermine Wikipedia's peer-production system.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.17288131313131316,
+        "width": 0.39733006535947707,
+        "x": 0.08872385620915033,
+        "y": 0.43176388888888884
+      },
+      "chunk_id": "opendataloader-001-0007",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 6,
+      "text": "Community concerns have also coalesced around the potential impact of genAI tools \u2013 and the economy supporting them \u2013 on the critical role that Wikimedia projects play in the larger knowledge environment. In 2018, the Wikimedia Foundation launched a cross-departmental program known as Knowledge Integrity. The program recognised the critical part that Wikimedia projects play in the broader information ecosystem, with a goal to secure Wikimedia as the \u201chub of a federated, trusted knowledge ecosystem\u201d (Zia et al. 2019). Although the program as a whole did not endure, several research strands continue to develop and inform Wikimedia Foundation strategy.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.1586388888888889,
+        "width": 0.397233660130719,
+        "x": 0.08872385620915033,
+        "y": 0.6075214646464646
+      },
+      "chunk_id": "opendataloader-001-0008",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 7,
+      "text": "The aim of this project is to explore the implications of genAI for knowledge integrity and to investigate the extent to which Wikipedia rules, practices and policies can maximise the benefits as well as address any risks. Rooted in the everyday practices of Wikimedians and informed by studies of knowledge infrastructure and digital policy, this project seeks to map out critical areas for possible policy intervention or adjustment of current practice to deal with possible risks to Wikimedia and the broader online knowledge ecosystem. The project seeks to answer the following questions:",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.028638888888888873,
+        "width": 0.39727941176470594,
+        "x": 0.08872385620915033,
+        "y": 0.7741881313131314
+      },
+      "chunk_id": "opendataloader-001-0009",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 8,
+      "text": "RQ1: Does the potential use of generative AI threaten knowledge integrity on Wikipedia? If so, how?",
+      "type": "list item"
+    },
+    {
+      "bbox": {
+        "height": 0.028638888888888873,
+        "width": 0.39734967320261433,
+        "x": 0.08872385620915033,
+        "y": 0.8032790404040404
+      },
+      "chunk_id": "opendataloader-001-0010",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 9,
+      "text": "RQ2: What steps could be taken to address any risks to knowledge integrity?",
+      "type": "list item"
+    },
+    {
+      "bbox": {
+        "height": 0.016779040404040407,
+        "width": 0.07298039215686274,
+        "x": 0.08872385620915033,
+        "y": 0.8474823232323232
+      },
+      "chunk_id": "opendataloader-001-0011",
+      "heading_level": 2,
+      "page_number": 1,
+      "reading_order": 10,
+      "text": "Methods",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.02863888888888889,
+        "width": 0.397235294117647,
+        "x": 0.08872385620915033,
+        "y": 0.8647941919191919
+      },
+      "chunk_id": "opendataloader-001-0012",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 11,
+      "text": "To understand the implications of genAI for Wikipedia and the broader information environment, we initially looked to",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.15924494949494952,
+        "width": 0.3973986928104575,
+        "x": 0.5149983660130718,
+        "y": 0.2229760101010101
+      },
+      "chunk_id": "opendataloader-001-0013",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 12,
+      "text": "practitioners\u2019 own understandings, analysing on-wiki discussions and conducting interviews and focus groups with Wikimedians, with an emphasis on Wikipedia policy and practice. Phase 1 data came from internal discussions between editors in public online forums such as the \u201cVillage Pump\u201d, as well as the Wikimedia online periodical, the \u201cSignpost\u201d and the Wikimedia blog, \u201cDiff\u201d. Data covered material posted from July 2022 to July 2023. Over 160,000 words of content were coded across 88 articles, blogs, and discussions, using an inductive and emergent qualitative analysis to identify critical themes.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.2610631313131313,
+        "width": 0.39732516339869284,
+        "x": 0.5149983660130718,
+        "y": 0.38267297979797976
+      },
+      "chunk_id": "opendataloader-001-0014",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 13,
+      "text": "We supplemented this text-based data through semistructured interviews and two focus groups. The interview cohort (n=16) was selected using purposive sampling, and included active members of the on-wiki discussions identified in the initial data analysis as well as Wikimedia researchers involved in the Knowledge Integrity project. The focus groups comprised a more broadly representative group of Wikimedians including culturally and linguistically diverse attendees at Wikimania 2023 in Singapore who were approached to participate after demonstrating interest in the impacts of genAI in Wikimania sessions. Instead of asking participants questions specifically about knowledge integrity, we asked more general questions about the benefits and challenges of genAI for Wikipedia in semi-structured interviews led by participants\u2019 own understandings of the issues. We then mapped those results to concepts and themes related to knowledge integrity from the literature (Harley and Cooper 2022; Yadav and Lai 2024).",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.028638888888888908,
+        "width": 0.39719607843137267,
+        "x": 0.5149983660130718,
+        "y": 0.6441881313131312
+      },
+      "chunk_id": "opendataloader-001-0015",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 14,
+      "text": "The project received ethics approval at the University of Technology Sydney (ETH21-5787-23-3).",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.016779040404040386,
+        "width": 0.06100326797385622,
+        "x": 0.5149983660130718,
+        "y": 0.6889974747474747
+      },
+      "chunk_id": "opendataloader-001-0016",
+      "heading_level": 2,
+      "page_number": 1,
+      "reading_order": 15,
+      "text": "Results",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.18833585858585855,
+        "width": 0.39727450980392165,
+        "x": 0.5149983660130718,
+        "y": 0.7087335858585859
+      },
+      "chunk_id": "opendataloader-001-0017",
+      "heading_level": null,
+      "page_number": 1,
+      "reading_order": 16,
+      "text": "RQ1 In interviews and focus groups, editors discussed benefits of genAI tools relating to improving productivity and expanding the scope of content across languages and in different formats. When asked about challenges, editors talked about risks both internal and external to Wikipedia. Internally, editors were concerned about the proliferation of AI-generated misinformation or biased content because of the difficulty in fact-checking and verifying AI outputs. Some worried AI-generated content could overwhelm human-inthe-loop curation processes even where it was detected. There was also concern about the uneven distribution of risk because genAI tools are not available for all languages and because low editor numbers in smaller versions could tip the",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.01409343434343435,
+        "width": 0.6436993464052287,
+        "x": 0.17869444444444446,
+        "y": 0.9387335858585859
+      },
+      "chunk_id": "opendataloader-001-0018",
+      "heading_level": 4,
+      "page_number": 1,
+      "reading_order": 17,
+      "text": "\u00a9 Copyright held by the owner/author(s), published under Creative Commons CC BY 4.0 License",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.014093434343434387,
+        "width": 0.3277222222222222,
+        "x": 0.33669934640522875,
+        "y": 0.04630934343434345
+      },
+      "chunk_id": "opendataloader-002-0001",
+      "heading_level": 4,
+      "page_number": 2,
+      "reading_order": 18,
+      "text": "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.26076010101010094,
+        "width": 0.39727287581699344,
+        "x": 0.08872385620915033,
+        "y": 0.09176388888888887
+      },
+      "chunk_id": "opendataloader-002-0002",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 19,
+      "text": "balance away from human control over curation, especially among non-English speakers. Externally, editors were concerned about the commercial exploitation of open content and editor labour by genAI companies. They were also concerned about the long-term sustainability of Wikipedia with the potential for people to turn increasingly to AI for their information needs. This also raised concerns about verifiability and other core principles and practices that underpin Wikipedia\u2019s epistemic value, because when the link between a claim and its source is broken, readers are no longer able to check the veracity of a claim or participate in the process of knowledge curation. And given Wikipedia\u2019s increasingly critical role in the information ecosystem, including as a source of high-quality data for AI training and augmented retrieval, some editors were concerned about the potential for information pollution on Wikipedia to lead to degradation of the broader information environment, or even model collapse.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.20288131313131316,
+        "width": 0.3972401960784314,
+        "x": 0.08872385620915033,
+        "y": 0.3675214646464646
+      },
+      "chunk_id": "opendataloader-002-0003",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 20,
+      "text": "RQ2 For many of the editors we spoke to, internal risks can likely be managed via existing policy and practices, while others urged the need for AI-specific policy. This disagreement was reflected in debate over a proposed English Wikipedia LLM policy, which failed to reach consensus. Many editors saw value in technical measures to mitigate risks, e.g. detecting and marking AI-generated content, and use of AI plugins. Others suggested that education about genAI is needed for new editors to learn how to use tools effectively. Many of those concerned about the increased risk in non-English Wikipedias thought there would be little incentive for AI companies to develop useful models for smaller languages. Many expressed similar concerns over problems of algorithmic bias and hallucination.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.173790404040404,
+        "width": 0.3972875816993464,
+        "x": 0.08872385620915033,
+        "y": 0.570854797979798
+      },
+      "chunk_id": "opendataloader-002-0004",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 21,
+      "text": "In relation to external risks, editors expressed consternation that the threat posed by genAI to the sustainability of Wikimedia projects and the open knowledge ecosystem could not be addressed solely from within Wikimedia. Many argued that transparency and accountability are not exclusively the responsibility of editors but also of AI companies and other relevant actors. Some suggested that the Wikimedia Foundation and Wikimedia community need to be pro-active in advocating for Wikimedia and open knowledge, including around copyright and licensing, while some expressed the need for cooperative policy agreements or increased regulation.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.016779040404040386,
+        "width": 0.19505555555555554,
+        "x": 0.08872385620915033,
+        "y": 0.7523308080808081
+      },
+      "chunk_id": "opendataloader-002-0005",
+      "heading_level": 2,
+      "page_number": 2,
+      "reading_order": 22,
+      "text": "Discussion/Conclusions",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.10136616161616163,
+        "width": 0.39729084967320255,
+        "x": 0.08872385620915033,
+        "y": 0.7696426767676767
+      },
+      "chunk_id": "opendataloader-002-0006",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 23,
+      "text": "When we take a narrow, on-platform view of Wikipedia, the threats posed by genAI seem to diminish to a level manageable mostly through existing practices. But considering Wikipedia\u2019s broader role in the production of public knowledge, new implications emerge. These may be more difficult to manage through internal Wikimedia practices or policy.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.02863888888888889,
+        "width": 0.39719444444444446,
+        "x": 0.08872385620915033,
+        "y": 0.8714608585858585
+      },
+      "chunk_id": "opendataloader-002-0007",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 24,
+      "text": "Three aspects of Wikipedia in the context of our information environment may be threatened by genAI:",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.24651767676767672,
+        "width": 0.39727124183006535,
+        "x": 0.5149983660130718,
+        "y": 0.09176388888888887
+      },
+      "chunk_id": "opendataloader-002-0008",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 25,
+      "text": "sustainability, equity, and verifiability. First, the enhanced affordances for editors to add automatically generated content to Wikipedia will undoubtedly increase the burden of maintenance, which may become unsustainableparticularly for smaller language Wikipedias. And genAI\u2019s wholesale extraction of Wikimedia content for training without regard for open licensing conditions reflects a larger risk to the ongoing sustainability of open knowledge. Second, the growth in genAI tools functional solely in large languages may worsen the disparity between different language versions. These risks are well understood in the community and in recent research (Vetter, Jiang, and McDowell 2025). Third \u2013 and less visible in our data \u2013 are inevitable challenges to Wikipedia\u2019s principle of verifiability as its data is increasingly extracted and abstracted by third-party tools, and where follow-on users are unable to enjoy the right to know the source of information or to participate in its correction.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.17379040404040397,
+        "width": 0.39729411764705885,
+        "x": 0.5149983660130718,
+        "y": 0.33843055555555557
+      },
+      "chunk_id": "opendataloader-002-0009",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 26,
+      "text": "The implications of genAI may be significant for Wikipedia, but their significance for the health, vitality and diversity of our public sphere is even more critical. The key elements of knowledge integrity such as verifiability are useful principles for establishing trustworthy information in a digitally mediated information environment. On Wikipedia, knowledge integrity is enabled through a suite of policies, standards and practices. Verifiability supports a reader\u2019s ability to check the veracity of a claim on Wikipedia and their ability to participate in the process of correcting inaccurate claims, i.e. becoming active in the curation of public knowledge claims.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.11591161616161619,
+        "width": 0.3972467320261438,
+        "x": 0.5149983660130718,
+        "y": 0.5126729797979798
+      },
+      "chunk_id": "opendataloader-002-0010",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 27,
+      "text": "The use of the term \u201cintegrity\u201d is on the rise as an antidote to online speech threats. United Nations Global Principles for Information Integrity (2024), for example, articulates that \u201cPromoting information integrity involves empowering people to exercise their right to seek, receive and impart information and ideas of all kinds and to hold opinions without interference.\u201d Despite the use of the term, there is little concrete engagement with how it could be achieved.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.11560858585858584,
+        "width": 0.39727124183006535,
+        "x": 0.5149983660130718,
+        "y": 0.6290366161616161
+      },
+      "chunk_id": "opendataloader-002-0011",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 28,
+      "text": "Wikimedians recognise that knowledge integrity is a feature of a trustworthy information system but that it is not some abstract quality determined from on high. Instead, it is dependent on a system of people, practices, material affordances and rules. The importance of knowledge integrity and verifiability become particularly important when claims are made about people, raising questions of epistemic justice (Frost-Arnold 2021; Watson 2021).",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.11560858585858587,
+        "width": 0.39724509803921576,
+        "x": 0.5149983660130718,
+        "y": 0.7450972222222222
+      },
+      "chunk_id": "opendataloader-002-0012",
+      "heading_level": null,
+      "page_number": 2,
+      "reading_order": 29,
+      "text": "As the capabilities of genAI systems evolve, substantive debates are unfolding across Wikimedia communities about embracing the innovative assistive benefits of genAI while upholding core principles of reliability, neutrality and human oversight. Ultimately, how Wikipedia navigates this technological disruption will have far-reaching impacts on other sources of public knowledge and the integrity of our information environment worldwide.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.01409343434343435,
+        "width": 0.6436993464052287,
+        "x": 0.17869444444444446,
+        "y": 0.9387335858585859
+      },
+      "chunk_id": "opendataloader-002-0013",
+      "heading_level": 4,
+      "page_number": 2,
+      "reading_order": 30,
+      "text": "\u00a9 Copyright held by the owner/author(s), published under Creative Commons CC BY 4.0 License",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.014093434343434387,
+        "width": 0.3277222222222222,
+        "x": 0.33669934640522875,
+        "y": 0.04630934343434345
+      },
+      "chunk_id": "opendataloader-003-0001",
+      "heading_level": 4,
+      "page_number": 3,
+      "reading_order": 31,
+      "text": "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.016108585858585905,
+        "width": 0.08762581699346406,
+        "x": 0.08872385620915033,
+        "y": 0.09196085858585856
+      },
+      "chunk_id": "opendataloader-003-0002",
+      "heading_level": 3,
+      "page_number": 3,
+      "reading_order": 32,
+      "text": "References",
+      "type": "heading"
+    },
+    {
+      "bbox": {
+        "height": 0.06409343434343441,
+        "width": 0.39208333333333334,
+        "x": 0.08872385620915033,
+        "y": 0.10843055555555547
+      },
+      "chunk_id": "opendataloader-003-0003",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 33,
+      "text": "Frost-Arnold, Karen. 2021. \u201cThe Epistemic Dangers of Context Collapse Online.\u201d In Applied Epistemology, edited by Jennifer Lackey, 0. Oxford University Press. https://doi.org/10.1093/oso/9780198833659.003.0018.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.047729797979798004,
+        "width": 0.3943202614379085,
+        "x": 0.08872385620915033,
+        "y": 0.17509722222222224
+      },
+      "chunk_id": "opendataloader-003-0004",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 34,
+      "text": "Harley, Kelsey, and Rodney Cooper. 2022. \u201cInformation Integrity: Are We There Yet?\u201d ACM Computing Surveys 54 (2): 1\u201335. https://doi.org/10.1145/3436817.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.014093434343434243,
+        "width": 0.3903986928104575,
+        "x": 0.08872385620915033,
+        "y": 0.22540025252525264
+      },
+      "chunk_id": "opendataloader-003-0005",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 35,
+      "text": "Vetter, Matthew A., Jialei Jiang, and Zachary J. McDowell.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.04742676767676769,
+        "width": 0.3516470588235295,
+        "x": 0.12352777777777778,
+        "y": 0.24206691919191914
+      },
+      "chunk_id": "opendataloader-003-0006",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 36,
+      "text": "2025. \u201cAn Endangered Species: How LLMs Threaten Wikipedia\u2019s Sustainability.\u201d AI & Society, February. https://doi.org/10.1007/s00146-025-02199-9.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.04742676767676769,
+        "width": 0.3798513071895424,
+        "x": 0.08872385620915033,
+        "y": 0.2920669191919192
+      },
+      "chunk_id": "opendataloader-003-0007",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 37,
+      "text": "Watson, Lani. 2021. The Right to Know: Epistemic Rights and Why We Need Them. London: Routledge. https://doi.org/10.4324/9780429438912.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.16439646464646465,
+        "width": 0.3788807189542483,
+        "x": 0.08872385620915033,
+        "y": 0.3420669191919192
+      },
+      "chunk_id": "opendataloader-003-0008",
+      "heading_level": null,
+      "page_number": 3,
+      "reading_order": 38,
+      "text": "Yadav, Kamya, and Samantha Lai. 2024. \u201cWhat Does Information Integrity Mean for Democracies?\u201d Lawfare, March. https://www.lawfaremedia.org/article/what-doesinformation-integrity-mean-for-democracies. Zia, Leila, Isaac Johnson, Bahodir Mansurov, Jonathan Morgan, Miriam Redi, Diego Saez-Trumper, and Dario Tarborelli. 2019. \u201cKnowledge Integrity: Wikimedia Research 2030.\u201d Wikimedia Foundation. https://doi.org/10.6084/m9.figshare.7704626.",
+      "type": "paragraph"
+    },
+    {
+      "bbox": {
+        "height": 0.01409343434343435,
+        "width": 0.6436993464052287,
+        "x": 0.17869444444444446,
+        "y": 0.9387335858585859
+      },
+      "chunk_id": "opendataloader-003-0009",
+      "heading_level": 4,
+      "page_number": 3,
+      "reading_order": 39,
+      "text": "\u00a9 Copyright held by the owner/author(s), published under Creative Commons CC BY 4.0 License",
+      "type": "heading"
+    }
+  ],
+  "title": "WikiWorkshop2025"
+}

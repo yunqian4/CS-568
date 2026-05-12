@@ -1,0 +1,106 @@
+{
+  "ignored_chunk_ids": [
+    "opendataloader-002-0001",
+    "opendataloader-002-0005"
+  ],
+  "paragraphs": [
+    {
+      "chunk_ids": [
+        "opendataloader-002-0002"
+      ],
+      "paragraph_id": "paragraph-0011-opendataloader-002-0002",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0003"
+      ],
+      "paragraph_id": "paragraph-0012-opendataloader-002-0003",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0004"
+      ],
+      "paragraph_id": "paragraph-0013-opendataloader-002-0004",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0006"
+      ],
+      "paragraph_id": "paragraph-0014-opendataloader-002-0006",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+        "Discussion/Conclusions"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0007",
+        "opendataloader-002-0008"
+      ],
+      "paragraph_id": "paragraph-0015-opendataloader-002-0007-0008",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+        "Discussion/Conclusions"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0009"
+      ],
+      "paragraph_id": "paragraph-0016-opendataloader-002-0009",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+        "Discussion/Conclusions"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0010"
+      ],
+      "paragraph_id": "paragraph-0017-opendataloader-002-0010",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+        "Discussion/Conclusions"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0011"
+      ],
+      "paragraph_id": "paragraph-0018-opendataloader-002-0011",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+        "Discussion/Conclusions"
+      ]
+    },
+    {
+      "chunk_ids": [
+        "opendataloader-002-0012"
+      ],
+      "paragraph_id": "paragraph-0019-opendataloader-002-0012",
+      "role": "paragraph",
+      "section_path": [
+        "Wiki Workshop (12th edition) \u2013 May 21-22, 2024",
+        "Discussion/Conclusions"
+      ]
+    }
+  ],
+  "title": "WikiWorkshop2025"
+}

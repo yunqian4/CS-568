@@ -809,3 +809,68 @@ select {
 .results-reset-button {
   justify-self: start;
 }
+
+/* Study route */
+
+.study-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(95, 122, 133, 0.2), transparent 28rem),
+    linear-gradient(180deg, #f5efe6 0%, #ded6ca 100%);
+}
+
+.study-card {
+  width: min(680px, 100%);
+  display: grid;
+  gap: 22px;
+  padding: 40px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.92);
+  box-shadow: 0 24px 60px rgba(54, 38, 18, 0.14);
+}
+
+.study-copy {
+  margin: 0;
+  color: rgba(23, 33, 33, 0.72);
+  font-size: 1rem;
+}
+
+.study-form {
+  display: grid;
+  gap: 18px;
+}
+
+.study-field {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.study-options {
+  display: grid;
+  gap: 8px;
+}
+
+.study-likert {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+  gap: 8px;
+}
+
+.study-likert-option {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(23, 33, 33, 0.16);
+  border-radius: 8px;
+  background: rgba(233, 223, 204, 0.36);
+  cursor: pointer;
+  font-weight: 700;
+}
