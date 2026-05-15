@@ -1,21 +1,39 @@
 {
-  "id": "wikiworkshop-keywords-example",
-  "title": "WikiWorkshop Keywords Example",
-  "enabled": true,
   "document_id": "wikiworkshop-2025",
+  "enabled": true,
+  "id": "wikiworkshop-keywords-example",
   "question_set_id": "wikiworkshop-2025-keywords",
-  "time_limit_seconds": 900,
-  "representation_condition": {
-    "id": "keywords",
-    "label": "Keywords",
-    "visible_representations": [
-      "keywords"
+  "questionnaires": {
+    "post": [
+      {
+        "id": "representation_helpful",
+        "label": "The displayed reading support was helpful.",
+        "max": 5,
+        "min": 1,
+        "required": true,
+        "type": "likert"
+      },
+      {
+        "id": "comments",
+        "label": "Optional comments",
+        "required": false,
+        "type": "textarea"
+      }
+    ],
+    "pre": [
+      {
+        "id": "familiarity",
+        "label": "I am familiar with the reading topic.",
+        "max": 5,
+        "min": 1,
+        "required": true,
+        "type": "likert"
+      }
     ]
   },
   "questions": [
     {
-      "id": "wiki-keywords-q1",
-      "text": "Which technology is emphasized in the paper?",
+      "answer_index": 2,
       "choices": [
         "Virtual reality headsets",
         "Blockchain ledgers",
@@ -23,11 +41,11 @@
         "Quantum processors",
         "Desktop publishing software"
       ],
-      "answer_index": 2
+      "id": "wikiworkshop-keywords-example-q1",
+      "text": "Which technology is emphasized in the paper?"
     },
     {
-      "id": "wiki-keywords-q2",
-      "text": "What community context does the paper discuss?",
+      "answer_index": 1,
       "choices": [
         "Clinical diagnosis",
         "Wikimedia peer production",
@@ -35,11 +53,11 @@
         "Satellite imaging",
         "Music recommendation"
       ],
-      "answer_index": 1
+      "id": "wikiworkshop-keywords-example-q2",
+      "text": "What community context does the paper discuss?"
     },
     {
-      "id": "wiki-keywords-q3",
-      "text": "What tradeoff does the paper highlight?",
+      "answer_index": 4,
       "choices": [
         "Replace all editors",
         "Remove citations",
@@ -47,35 +65,18 @@
         "Ignore governance",
         "Balance productivity with quality risks"
       ],
-      "answer_index": 4
+      "id": "wikiworkshop-keywords-example-q3",
+      "text": "What tradeoff does the paper highlight?"
     }
   ],
-  "questionnaires": {
-    "pre": [
-      {
-        "id": "familiarity",
-        "label": "I am familiar with the reading topic.",
-        "type": "likert",
-        "min": 1,
-        "max": 5,
-        "required": true
-      }
-    ],
-    "post": [
-      {
-        "id": "representation_helpful",
-        "label": "The displayed reading support was helpful.",
-        "type": "likert",
-        "min": 1,
-        "max": 5,
-        "required": true
-      },
-      {
-        "id": "comments",
-        "label": "Optional comments",
-        "type": "textarea",
-        "required": false
-      }
+  "representation_condition": {
+    "id": "keywords",
+    "label": "Keywords",
+    "visible_representations": [
+      "keywords"
     ]
-  }
+  },
+  "time_limit_seconds": 900,
+  "timing_mode": "countdown",
+  "title": "WikiWorkshop Keywords Example"
 }

@@ -65,21 +65,23 @@ function validateSubmission(payload) {
 
 function scoreAnswers(answers, answerKey) {
   const keyById = new Map((answerKey || []).map((item) => [item.id, Number(item.answer_index)]));
+  const answerById = new Map((answers || []).map((item) => [item.question_id, item]));
   let correct = 0;
-  const details = answers.map((answer) => {
-    const correctIndex = keyById.get(answer.question_id);
+  const details = [];
+  for (const [questionId, correctIndex] of keyById.entries()) {
+    const answer = answerById.get(questionId) || {};
     const rawSelectedIndex = answer.selected_index;
     const selectedIndex = rawSelectedIndex === null || rawSelectedIndex === undefined
       ? null
       : Number(rawSelectedIndex);
     const isCorrect = Number.isInteger(correctIndex) && selectedIndex === correctIndex;
     if (isCorrect) correct += 1;
-    return {
+    details.push({
       correct: isCorrect,
-      question_id: answer.question_id,
+      question_id: questionId,
       selected_index: Number.isInteger(selectedIndex) ? selectedIndex : null,
-    };
-  });
+    });
+  }
 
   return {
     correct,

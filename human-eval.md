@@ -2,6 +2,15 @@
 
 Use `human-study/` as the study designer workspace. A designer should not need to edit backend or frontend internals for normal study setup.
 
+The simplest path is the visual designer:
+
+```text
+http://127.0.0.1:5173/prepare-document
+http://127.0.0.1:5173/exam-designer
+```
+
+Select an existing current document or upload a PDF in the `Document upload and preprocess` tab, then click `Process document`. The designer processes uploads with OpenDataLoader only, opens the reader preview, and does not run LLM paragraph matching or generate representations until you edit prompts and click `Apply` in the `Representation generation` tab.
+
 ## 1. Add A PDF
 
 Create one subdirectory per reusable document:
@@ -39,9 +48,18 @@ human-study/documents/my-paper/config.json
 human-study/documents/my-paper/chunks.json
 human-study/documents/my-paper/paragraphs.json
 human-study/documents/my-paper/document.json
+human-study/documents/my-paper/representation-prompts.json
 ```
 
 You can stop here and edit `chunks.json`, `paragraphs.json`, or `document.json`. The next stage reads these editable files.
+
+For visual editing, start the backend and frontend dev servers and open:
+
+```text
+http://127.0.0.1:5173/prepare-document
+```
+
+The designer route displays chunk IDs on the PDF and uses three right-pane tabs. `Paragraph matching` edits paragraph-to-chunk mappings only: click chunk rows to toggle selection for a paragraph, preview the selected text, and use `Add above` or `Add below` to insert paragraph rows. When you click `Save document`, paragraph IDs are assigned in view order as `paragraph-1`, `paragraph-2`, and so on. It saves document sidecars back into `human-study/documents/<document-id>/`. You can skip the script extraction step when you upload and process the PDF directly in `/prepare-document`.
 
 ## 3. Generate Representations
 
@@ -49,7 +67,10 @@ Edit prompts, thresholds, colors, model, or OpenAI settings in:
 
 ```text
 human-study/documents/my-paper/config.json
+human-study/documents/my-paper/representation-prompts.json
 ```
+
+The `/prepare-document` route can also add, edit, remove, and save representation prompt definitions. Prompt definitions are saved to `representation-prompts.json` and mirrored into `config.json` for script compatibility, while generated representation data is saved separately to `representations.json`. In the visual workflow, representation generation is manual: edit prompts first, then click `Apply`. Apply uses up to four concurrent OpenAI representation calls and shows a progress bar while jobs run. The save buttons alert the files written under `human-study/documents/<document-id>/`.
 
 Then run:
 
@@ -63,6 +84,7 @@ Outputs:
 human-study/documents/my-paper/providers/opendataloader/llm/representations/
 human-study/documents/my-paper/document.json
 human-study/documents/my-paper/paragraphs.json
+human-study/documents/my-paper/representations.json
 ```
 
 You can edit generated representations in `document.json` or `paragraphs.json` before export.
@@ -75,15 +97,24 @@ Create or edit files in:
 human-study/exams/
 ```
 
+You can also use:
+
+```text
+http://127.0.0.1:5173/exam-designer
+```
+
 Each exam JSON chooses a reusable document and defines:
 
 - exam id and title
 - `document_id`
 - `question_set_id`
-- `time_limit_seconds`
-- `representation_condition.visible_representations`
+- `timing_mode`: `countdown` or `stopwatch`
+- `time_limit_seconds` for countdown exams
+- `representation_condition.visible_representations`, selected through multi-select checkboxes in `/exam-designer`
 - exam questions with private `answer_index`
 - pre/post questionnaires
+
+Question IDs are assigned automatically from the exam id and question order.
 
 The repo includes examples:
 
@@ -114,7 +145,7 @@ The default scheduler is weighted random:
 }
 ```
 
-Cloudflare participants are assigned from this scheduler when they open `/study`.
+Cloudflare participants are assigned from this scheduler when they open `/study` or `/exam`.
 
 ## 6. Export For Cloudflare
 
@@ -156,9 +187,13 @@ Open:
 
 ```text
 http://127.0.0.1:8788/study
+http://127.0.0.1:8788/exam
 ```
 
-Local preview can load the study and static documents. Real submission scoring needs the `STUDY_RESULTS` R2 binding and uploaded private answer keys.
+Local preview can load the study, exam, and static documents. Real submission scoring needs the `STUDY_RESULTS` R2 binding and uploaded private answer keys.
+
+The `/exam` route is backend-free in the Cloudflare deployment. It samples an exported exam, waits for Start, displays only the configured representation names, hides paragraph/chunk ids, records elapsed time from zero for stopwatch exams, auto-submits countdown exams when time expires, and always provides a submit button after the exam questions.
+Unanswered questions are submitted as blank answers. After a successful submission, the participant is notified and the exam session ends. In local Vite/FastAPI preview, FastAPI mirrors `/api/study/score-submit`; in Cloudflare, the Pages Function handles the same endpoint.
 
 ## 8. Upload Private Answer Keys
 

@@ -9,6 +9,9 @@
 - `backend/tests/`: backend unit tests.
 - `frontend/src/`: React app source.
 - `frontend/src/components/`: landing page, reader page, and PDF viewer components.
+- `frontend/src/components/DesignerPage.jsx`: local prepare-document route with tabs for upload/preprocess, paragraph matching, and prompt-driven representation generation.
+- `frontend/src/components/ExamDesignerPage.jsx`: local exam-designer route for creating cached exam JSON, timer mode, multiple-select visible representation conditions, and multiple-choice questions.
+- `frontend/src/components/ExamPage.jsx`: backend-free Cloudflare-compatible exam runner that samples exported exam settings.
 - `frontend/src/overlays/`: overlay-building logic and replaceable overlay rules.
 - `frontend/public/study-cache/`: static cached-study assets copied into the Cloudflare Pages build.
 - `functions/api/study/`: Cloudflare Pages Functions for cached-study scoring and result capture.
@@ -34,6 +37,14 @@ From `frontend/`, start the frontend dev server:
 
 ```powershell
 npm.cmd run dev
+```
+
+Local study document designer:
+
+```powershell
+# Run backend and frontend dev servers, then open:
+http://127.0.0.1:5173/prepare-document
+http://127.0.0.1:5173/exam-designer
 ```
 
 Optional GROBID provider:
@@ -135,6 +146,9 @@ Linting:
 - The landing page must support either uploading a PDF or entering a PDF URL.
 - After confirmation, the app should open the web reader for that PDF.
 - The `/study` route is a controlled cached-study runner for Cloudflare Pages deployments without the FastAPI backend.
+- The `/prepare-document` route is a local preparation tool for uploading and processing human-study PDFs, matching chunks to paragraphs, editing representation prompts, and explicitly generating representations before export.
+- The `/exam-designer` route is a local exam-setting editor for reusable prepared documents.
+- The `/exam` route is a backend-free cached exam runner for Cloudflare Pages.
 
 ## Engineering Conventions
 
@@ -207,6 +221,9 @@ Linting:
 - Keep parser selection, chunk-to-block mapping, and zoomable document construction modular so additional providers can be added without rewriting the reader contract.
 - Cached study exports are generated offline from `dat/temp/<sha256>/providers/opendataloader/document.json` and `source.pdf`; Cloudflare Pages must not run OpenDataLoader, Java, FastAPI, or live OpenAI calls.
 - The human-study scripts should use the existing backend parser and representation pipeline, keep editable intermediates under `human-study/documents/<document-id>/`, and avoid persisting request API keys in public exports.
+- The backend exposes local `GET` and `POST` endpoints under `/api/human-study/documents` so `/prepare-document` can upload/process PDFs, serve source PDFs, read and persist `human-study/documents/<document-id>/document.json`, `chunks.json`, `paragraphs.json`, `config.json`, and `representation-prompts.json`, and explicitly generate representations after prompt edits.
+- The backend exposes local `GET`, `POST`, and `DELETE` endpoints under `/api/human-study/exams` so `/exam-designer` can list, save, and remove exam JSON files under `human-study/exams/`.
+- The prepare-document upload path runs OpenDataLoader only; it must not run LLM paragraph matching or auto-generate LLM representations before the designer edits and submits representation prompts.
 - Cached study result capture uses Pages Functions and an R2 binding named `STUDY_RESULTS`.
 - Study submissions should be written as one immutable JSON object under `study-results/<study_id>/<yyyy-mm-dd>/<session_id>.json` instead of appending to a shared file.
 - Private answer keys should be uploaded to R2 under `study-private/answer-keys/<question_set_id>.json`.
@@ -215,8 +232,25 @@ Linting:
 
 - Render the PDF in a web reader.
 - Render `/study` as a separate cached-study route while preserving `/` as the upload/debug reader.
+- Render `/prepare-document` as a separate local designer route while preserving `/` and `/study`.
+- Render `/exam-designer` as a local-only exam JSON editor while preserving existing routes.
+- Render `/exam` as a static cached exam runner that does not depend on FastAPI.
+- The designer route should let designers select an existing prepared document or upload a new PDF, process uploads with OpenDataLoader only, reuse the reader interface for preview, force chunk ID labels on every chunk, and provide controls for matching paragraph blocks to chunks with click-to-toggle multi-selection.
+- The designer route should support adding paragraphs above or below existing paragraph blocks while matching chunks.
+- The designer route should display paragraph IDs as ordered view labels and assign saved paragraph IDs in order as `paragraph-1`, `paragraph-2`, and so on when the designer clicks Save document.
+- The paragraph matching pane should show a text preview from the currently selected chunks for each paragraph.
+- The designer route should save document edits to `document.json`, `chunks.json`, and `paragraphs.json`, and save representation prompt edits to a separate `representation-prompts.json` file plus compatible `config.json` updates through the local backend when available.
+- The designer route should generate document representations only after the designer edits prompts and clicks the explicit Apply generation control.
+- The designer Apply control should request at most four concurrent OpenAI representation calls and show generation progress while jobs run.
+- The designer Save representations control should write prompt definitions and generated representation data to separate files and alert the designer with the saved paths.
+- If the local backend is unavailable, the designer route may fall back to exported static assets and JSON downloads.
 - The study route should assign one exam setting from `frontend/public/study-cache/manifest.json` using the exported global scheduler.
 - The study route should use an anonymous browser participant id, collect pre-questionnaire responses, display the assigned cached PDF, collect exam answers, collect post-questionnaire responses, then submit to `/api/study/score-submit`.
+- The exam route should sample one exported exam setting, wait for an explicit Start button, display only the configured representation kinds, hide paragraph/chunk id labels, and submit answers to `/api/study/score-submit`.
+- Exam settings support `timing_mode` values `countdown` and `stopwatch`; countdown exams auto-submit when the timer expires, and both modes show a submit button after the questions.
+- Exam question IDs are assigned automatically from exam id and question order; designers should not manually edit question IDs.
+- Exam submissions must allow unanswered questions and submit them as `selected_index: null`; after successful submission the UI should notify the participant and end the session.
+- FastAPI provides a local-development mirror of `POST /api/study/score-submit`, but Cloudflare deployments use the Pages Function implementation.
 - The reader should support normal PDF zoom in/out controls, with canvas, text layer, and overlays scaling together.
 - Wide PDF pages should share one horizontal scroll context instead of each page having its own horizontal scrollbar.
 - Overlay visible PDF regions with modular overlay containers.

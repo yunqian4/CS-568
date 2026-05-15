@@ -6,8 +6,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -19,9 +21,12 @@ from pydantic import BaseModel, HttpUrl
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_ROOT = Path(__file__).resolve().parent
 TEMP_DOCUMENT_ROOT = REPO_ROOT / "dat" / "temp"
+HUMAN_STUDY_ROOT = REPO_ROOT / "human-study"
 SOURCE_PDF_NAME = "source.pdf"
 MANIFEST_NAME = "manifest.json"
 DOCUMENT_JSON_NAME = "document.json"
+REPRESENTATION_PROMPTS_NAME = "representation-prompts.json"
+REPRESENTATIONS_NAME = "representations.json"
 CONTENT_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 CACHE_VERSION = "opendataloader-llm-progressive-v10"
 
@@ -100,6 +105,7 @@ class LlmOptionsRequest(BaseModel):
     summary_min_words: int | None = None
     summary_word_ratio: float | None = None
     max_keywords: int | None = None
+    openai_representation_parallelism: int | None = None
     representations: list["RepresentationDefinitionRequest"] | None = None
 
     def to_config(self) -> LlmRepresentationConfig:
@@ -113,6 +119,7 @@ class LlmOptionsRequest(BaseModel):
             summary_min_words=self.summary_min_words,
             summary_word_ratio=self.summary_word_ratio,
             max_keywords=self.max_keywords,
+            parallel_jobs=self.openai_representation_parallelism,
             representations=_request_representation_definitions(self.representations),
         )
 
@@ -161,11 +168,362 @@ class QuizRequest(BaseModel):
     model: str | None = None
 
 
+class HumanStudyDocumentSaveRequest(BaseModel):
+    """Editable human-study document payload from the designer route."""
+
+    document: dict[str, Any]
+    chunks: dict[str, Any] | None = None
+    paragraphs: dict[str, Any] | None = None
+
+
+class HumanStudyRepresentationsSaveRequest(BaseModel):
+    """Editable representation prompt payload from the designer route."""
+
+    representations: list[RepresentationDefinitionRequest]
+    document: dict[str, Any] | None = None
+
+
+class HumanStudyGenerateRepresentationsRequest(LlmOptionsRequest):
+    """Request payload for explicit designer-triggered generation."""
+
+
+class HumanStudyExamSaveRequest(BaseModel):
+    """Editable exam setting payload from the local exam designer."""
+
+    exam: dict[str, Any]
+
+
+class StudyScoreSubmitRequest(BaseModel):
+    """Local development mirror of the Cloudflare Pages scoring payload."""
+
+    answers: list[dict[str, Any]]
+    assignment: dict[str, Any]
+    client: dict[str, Any] | None = None
+    participant_id: str
+    session_id: str
+    study_id: str
+    submitted_at: str | None = None
+    timing: dict[str, Any] | None = None
+
+
 @app.get("/api/health")
 def healthcheck() -> dict[str, str]:
     """Simple probe used by the frontend during development."""
 
     return {"status": "ok"}
+
+
+@app.post("/api/study/score-submit")
+def local_score_submit(payload: StudyScoreSubmitRequest) -> dict[str, object]:
+    """Score and store cached exam submissions during local FastAPI development."""
+
+    question_set_id = str(payload.assignment.get("question_set_id") or "")
+    if not question_set_id:
+        raise HTTPException(status_code=400, detail="Missing question_set_id.")
+
+    answer_key = _load_human_study_answer_key(question_set_id)
+    score = _score_human_study_answers(payload.answers, answer_key)
+    now = datetime.now(timezone.utc)
+    study_id = _safe_artifact_name(payload.study_id) or "study"
+    session_id = _safe_artifact_name(payload.session_id) or f"session-{int(now.timestamp())}"
+    result_dir = HUMAN_STUDY_ROOT / "results" / study_id / now.date().isoformat()
+    result_dir.mkdir(parents=True, exist_ok=True)
+    result_key = result_dir / f"{session_id}.json"
+    _write_json(
+        result_key,
+        {
+            **payload.model_dump(),
+            "received_at": now.isoformat(),
+            "result_key": str(result_key),
+            "score": score,
+        },
+    )
+    return {"ok": True, "result_key": str(result_key), "score": score, "session_id": session_id}
+
+
+@app.get("/api/human-study/documents")
+def list_human_study_documents() -> dict[str, object]:
+    """Return editable study documents available in the local workspace."""
+
+    documents_root = HUMAN_STUDY_ROOT / "documents"
+    pdfs_root = HUMAN_STUDY_ROOT / "pdfs"
+    document_ids = {
+        path.name
+        for root in (documents_root, pdfs_root)
+        if root.exists()
+        for path in root.iterdir()
+        if path.is_dir()
+    }
+
+    documents = []
+    for document_id in sorted(document_ids):
+        workspace = _human_study_document_dir(document_id)
+        document_path = workspace / DOCUMENT_JSON_NAME
+        payload = _read_optional_json(document_path)
+        documents.append(
+            {
+                "document_id": document_id,
+                "has_document": document_path.exists(),
+                "has_pdf": _human_study_pdf_path(document_id).exists(),
+                "title": str(payload.get("title") or payload.get("source_name") or document_id),
+            }
+        )
+
+    return {"documents": documents}
+
+
+@app.get("/api/human-study/exams")
+def list_human_study_exams() -> dict[str, object]:
+    """Return editable exam settings and prepared document options."""
+
+    exam_root = HUMAN_STUDY_ROOT / "exams"
+    exams = []
+    if exam_root.exists():
+        for path in sorted(exam_root.glob("*.json")):
+            try:
+                exam = _normalize_human_study_exam(_read_json(path), fallback_id=path.stem)
+            except HTTPException:
+                continue
+            exams.append(exam)
+    return {
+        "documents": list_human_study_documents()["documents"],
+        "exams": exams,
+    }
+
+
+@app.get("/api/human-study/exams/{exam_id}")
+def get_human_study_exam(exam_id: str) -> dict[str, object]:
+    """Load one editable exam JSON file."""
+
+    exam_path = _human_study_exam_path(exam_id)
+    if not exam_path.exists():
+        raise HTTPException(status_code=404, detail="Human-study exam not found.")
+    return {"exam": _normalize_human_study_exam(_read_json(exam_path), fallback_id=exam_id)}
+
+
+@app.post("/api/human-study/exams/{exam_id}")
+def save_human_study_exam(exam_id: str, payload: HumanStudyExamSaveRequest) -> dict[str, object]:
+    """Persist one editable exam setting JSON file."""
+
+    exam = _normalize_human_study_exam(payload.exam, fallback_id=exam_id)
+    if exam["id"] != exam_id:
+        exam["id"] = _human_study_exam_id(exam_id)
+    exam_path = _human_study_exam_path(exam_id)
+    exam_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(exam_path, exam)
+    return {"exam": exam, "ok": True, "saved_path": str(exam_path)}
+
+
+@app.delete("/api/human-study/exams/{exam_id}")
+def delete_human_study_exam(exam_id: str) -> dict[str, object]:
+    """Delete one editable exam setting JSON file."""
+
+    exam_path = _human_study_exam_path(exam_id)
+    if not exam_path.exists():
+        raise HTTPException(status_code=404, detail="Human-study exam not found.")
+    exam_path.unlink()
+    return {"deleted_path": str(exam_path), "ok": True}
+
+
+@app.post("/api/human-study/documents/upload")
+async def upload_human_study_document(
+    file: UploadFile = File(...),
+    document_id: str | None = Form(None),
+    llm_model: str | None = Form(None),
+) -> dict[str, object]:
+    """Parse an uploaded study PDF with OpenDataLoader only."""
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please upload a PDF file.")
+
+    pdf_bytes = await file.read()
+    if not pdf_bytes.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid PDF.")
+
+    study_document_id = _human_study_document_id(document_id or Path(file.filename).stem)
+    try:
+        _prepare_human_study_document(
+            document_id=study_document_id,
+            pdf_bytes=pdf_bytes,
+            source_name=file.filename,
+            representation_model=llm_model,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return get_human_study_document(study_document_id)
+
+
+@app.get("/api/human-study/documents/{document_id}")
+def get_human_study_document(document_id: str) -> dict[str, object]:
+    """Load one editable human-study document and its sidecar JSON files."""
+
+    workspace = _human_study_document_dir(document_id)
+    document_path = workspace / DOCUMENT_JSON_NAME
+    if not document_path.exists():
+        raise HTTPException(status_code=404, detail="Human-study document not found.")
+
+    document = _read_json(document_path)
+    document["pdf_url"] = f"/api/human-study/documents/{document_id}/file"
+    return {
+        "config": _read_optional_json(workspace / "config.json"),
+        "chunks": _read_optional_json(workspace / "chunks.json"),
+        "document": document,
+        "paragraphs": _read_optional_json(workspace / "paragraphs.json"),
+        "representation_prompts": _read_optional_json(workspace / REPRESENTATION_PROMPTS_NAME),
+    }
+
+
+@app.get("/api/human-study/documents/{document_id}/file")
+def get_human_study_pdf_file(document_id: str) -> FileResponse:
+    """Serve a human-study source PDF for the local designer route."""
+
+    pdf_path = _human_study_pdf_path(document_id)
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="Human-study PDF not found.")
+    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
+
+
+@app.post("/api/human-study/documents/{document_id}")
+def save_human_study_document(
+    document_id: str,
+    payload: HumanStudyDocumentSaveRequest,
+) -> dict[str, object]:
+    """Persist edited chunks, paragraph mappings, and document JSON."""
+
+    workspace = _human_study_document_dir(document_id)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    raw_document = dict(payload.document)
+    chunks = payload.chunks or {"pages": raw_document.get("pages", [])}
+    raw_blocks = _safe_list((payload.paragraphs or {}).get("blocks")) or _safe_list(raw_document.get("blocks"))
+    paragraphs = {"blocks": _renumber_human_study_blocks(raw_blocks)}
+
+    raw_document["pages"] = chunks.get("pages", raw_document.get("pages", []))
+    raw_document["blocks"] = paragraphs["blocks"]
+    document = _normalize_human_study_document(document_id, raw_document)
+    _write_human_study_payloads(document_id, document)
+    _write_json(workspace / "chunks.json", {"pages": document.get("pages", [])})
+    _write_json(workspace / "paragraphs.json", paragraphs)
+    return {
+        "ok": True,
+        "document_id": document_id,
+        "saved_paths": _human_study_saved_paths(
+            document_id,
+            [DOCUMENT_JSON_NAME, "chunks.json", "paragraphs.json"],
+        ),
+    }
+
+
+@app.post("/api/human-study/documents/{document_id}/representations")
+def save_human_study_representations(
+    document_id: str,
+    payload: HumanStudyRepresentationsSaveRequest,
+) -> dict[str, object]:
+    """Persist editable representation prompt definitions for a study document."""
+
+    workspace = _human_study_document_dir(document_id)
+    if not workspace.exists():
+        raise HTTPException(status_code=404, detail="Human-study document not found.")
+
+    definitions = [definition.to_definition().to_dict() for definition in payload.representations]
+    config_path = workspace / "config.json"
+    config = _read_optional_json(config_path)
+    config.setdefault("llm", {})
+    if not isinstance(config["llm"], dict):
+        config["llm"] = {}
+    config["llm"]["representations"] = definitions
+    config["llm"]["api_key"] = ""
+    _write_json(config_path, config)
+    prompt_payload = _write_human_study_prompt_file(document_id, definitions)
+
+    document_path = workspace / DOCUMENT_JSON_NAME
+    if document_path.exists():
+        document = _read_json(document_path)
+        document.setdefault("metadata", {})
+        if not isinstance(document["metadata"], dict):
+            document["metadata"] = {}
+        document["metadata"]["representation_definitions"] = definitions
+        document = _normalize_human_study_document(document_id, document)
+        _write_json(document_path, document)
+
+    representations_source = payload.document if payload.document is not None else _read_optional_json(document_path)
+    representations_payload = _write_human_study_representations_file(document_id, representations_source)
+    return {
+        "ok": True,
+        "document_id": document_id,
+        "representation_prompts": prompt_payload,
+        "representations": definitions,
+        "representation_file": representations_payload,
+        "saved_paths": _human_study_saved_paths(
+            document_id,
+            [REPRESENTATION_PROMPTS_NAME, REPRESENTATIONS_NAME],
+        ),
+    }
+
+
+@app.get("/api/human-study/documents/{document_id}/representations/status")
+def get_human_study_representation_status(document_id: str) -> dict[str, object]:
+    """Return current generation status for the designer progress bar."""
+
+    workspace = _human_study_document_dir(document_id)
+    if not workspace.exists():
+        raise HTTPException(status_code=404, detail="Human-study document not found.")
+    return representation_snapshot(workspace / "providers" / "opendataloader")
+
+
+@app.post("/api/human-study/documents/{document_id}/representations/generate")
+def generate_human_study_representations(
+    document_id: str,
+    payload: HumanStudyGenerateRepresentationsRequest,
+) -> dict[str, object]:
+    """Generate study representations only after designer prompt confirmation."""
+
+    workspace = _human_study_document_dir(document_id)
+    document_path = workspace / DOCUMENT_JSON_NAME
+    if not document_path.exists():
+        raise HTTPException(status_code=404, detail="Human-study document not found.")
+
+    llm_config = payload.to_config()
+    llm_config.enabled = True
+    if not _has_representation_api_key(llm_config):
+        raise HTTPException(status_code=400, detail="Representation generation requires a user API key or OPENAI_API_KEY.")
+
+    provider_dir = workspace / "providers" / "opendataloader"
+    document_payload = _normalize_human_study_document(document_id, _read_json(document_path))
+    _clear_payload_representations(document_payload)
+    cached_document = _document_from_cached_payload(document_payload)
+    status = initialize_representation_jobs(cached_document, llm_config, provider_dir)
+    metadata = document_payload.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        document_payload["metadata"] = metadata
+    metadata["llm_representations"] = status
+    metadata["representation_profile"] = _representation_profile(llm_config)
+    metadata["representation_definitions"] = [
+        definition.to_dict() for definition in llm_config.representations
+    ]
+    _update_human_study_llm_config(document_id, llm_config)
+
+    _write_human_study_payloads(document_id, document_payload)
+    run_representation_jobs(cached_document, llm_config, provider_dir)
+    refreshed_payload = merge_completed_representations(document_payload, provider_dir)
+    _write_human_study_payloads(document_id, refreshed_payload)
+    representation_file = _write_human_study_representations_file(document_id, refreshed_payload)
+
+    refreshed_payload["pdf_url"] = f"/api/human-study/documents/{document_id}/file"
+    return {
+        "config": _read_optional_json(workspace / "config.json"),
+        "chunks": _read_optional_json(workspace / "chunks.json"),
+        "document": refreshed_payload,
+        "paragraphs": _read_optional_json(workspace / "paragraphs.json"),
+        "representation_file": representation_file,
+        "representation_prompts": _read_optional_json(workspace / REPRESENTATION_PROMPTS_NAME),
+        "saved_paths": _human_study_saved_paths(
+            document_id,
+            [DOCUMENT_JSON_NAME, "paragraphs.json", REPRESENTATION_PROMPTS_NAME, REPRESENTATIONS_NAME],
+        ),
+    }
 
 
 @app.get("/api/llm/config")
@@ -832,9 +1190,430 @@ def _read_manifest(document_dir: Path) -> dict[str, object]:
 
 def _read_json(path: Path) -> dict[str, object]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as error:
         raise HTTPException(status_code=400, detail="Stored document JSON is unreadable.") from error
+
+
+def _read_optional_json(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    return _read_json(path)
+
+
+def _prepare_human_study_document(
+    *,
+    document_id: str,
+    pdf_bytes: bytes,
+    source_name: str,
+    representation_model: str | None,
+) -> dict[str, object]:
+    """Build editable human-study artifacts without generating representations."""
+
+    workspace = _human_study_document_dir(document_id)
+    provider_dir = workspace / "providers" / "opendataloader"
+    if provider_dir.exists():
+        shutil.rmtree(provider_dir)
+    provider_dir.mkdir(parents=True, exist_ok=True)
+
+    pdf_dir = HUMAN_STUDY_ROOT / "pdfs" / document_id
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / SOURCE_PDF_NAME).write_bytes(pdf_bytes)
+    (workspace / SOURCE_PDF_NAME).write_bytes(pdf_bytes)
+
+    parsed_document = parse_pdf_provider_output(
+        source_name=source_name,
+        pdf_bytes=pdf_bytes,
+        provider="opendataloader",
+    )
+    document = build_pdf_document_from_parsed_pdf(
+        document_id=document_id,
+        source_name=source_name,
+        provider="opendataloader",
+        parsed_document=parsed_document,
+    )
+    document.metadata["cache_version"] = CACHE_VERSION
+    document.metadata["cache_profile"] = _cache_profile(
+        provider="opendataloader",
+        llm_config=LlmRepresentationConfig.from_values(enabled=False, model=representation_model),
+    )
+    representation_config = LlmRepresentationConfig.from_values(
+        enabled=True,
+        model=representation_model,
+    )
+    document.metadata["representation_definitions"] = [
+        definition.to_dict() for definition in representation_config.representations
+    ]
+    document.metadata["llm_representations"] = {
+        "enabled": False,
+        "model": representation_config.model,
+        "status": "not_started",
+        "total_jobs": 0,
+        "completed_jobs": 0,
+        "failed_jobs": 0,
+        "running_jobs": 0,
+        "pending_jobs": 0,
+    }
+    _clear_block_representations(document)
+
+    payload = document.to_dict()
+    payload["content_hash"] = hashlib.sha256(pdf_bytes).hexdigest()
+    payload["document_id"] = document_id
+    payload["pdf_url"] = f"/study-cache/documents/{document_id}/source.pdf"
+    payload["provider"] = "opendataloader"
+    payload["study_document_id"] = document_id
+    payload = _normalize_human_study_document(document_id, payload)
+    _write_json(provider_dir / DOCUMENT_JSON_NAME, payload)
+    _write_human_study_payloads(document_id, payload)
+    _write_human_study_config(document_id, source_name, representation_config)
+    return payload
+
+
+def _write_human_study_config(
+    document_id: str,
+    source_name: str,
+    representation_config: LlmRepresentationConfig,
+) -> None:
+    """Write editable config for a prepared study document without secrets."""
+
+    config = {
+        "provider": "opendataloader",
+        "source_name": source_name,
+        "semantic": {"enabled": True},
+        "llm": {
+            "enabled": True,
+            "api_key": "",
+            "model": representation_config.model,
+            "keyword_min_words": representation_config.keyword_min_words,
+            "summary_min_words": representation_config.summary_min_words,
+            "summary_word_ratio": representation_config.summary_word_ratio,
+            "max_keywords": representation_config.max_keywords,
+            "openai_representation_parallelism": representation_config.parallel_jobs,
+            "representations": [
+                definition.to_dict() for definition in representation_config.representations
+            ],
+        },
+    }
+    _write_json(_human_study_document_dir(document_id) / "config.json", config)
+    _write_human_study_prompt_file(
+        document_id,
+        [definition.to_dict() for definition in representation_config.representations],
+    )
+
+
+def _update_human_study_llm_config(document_id: str, llm_config: LlmRepresentationConfig) -> None:
+    """Persist generation settings without storing the active API key."""
+
+    config_path = _human_study_document_dir(document_id) / "config.json"
+    config = _read_optional_json(config_path)
+    config.setdefault("llm", {})
+    if not isinstance(config["llm"], dict):
+        config["llm"] = {}
+    config["llm"].update(
+        {
+            "enabled": True,
+            "api_key": "",
+            "model": llm_config.model,
+            "keyword_min_words": llm_config.keyword_min_words,
+            "summary_min_words": llm_config.summary_min_words,
+            "summary_word_ratio": llm_config.summary_word_ratio,
+            "max_keywords": llm_config.max_keywords,
+            "openai_representation_parallelism": llm_config.parallel_jobs,
+            "representations": [
+                definition.to_dict() for definition in llm_config.representations
+            ],
+        }
+    )
+    _write_json(config_path, config)
+    _write_human_study_prompt_file(
+        document_id,
+        [definition.to_dict() for definition in llm_config.representations],
+    )
+
+
+def _write_human_study_prompt_file(document_id: str, definitions: list[dict[str, Any]]) -> dict[str, object]:
+    """Persist editable representation prompts separately from generation config."""
+
+    payload = {
+        "document_id": document_id,
+        "representations": definitions,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _write_json(_human_study_document_dir(document_id) / REPRESENTATION_PROMPTS_NAME, payload)
+    return payload
+
+
+def _write_human_study_representations_file(document_id: str, document: dict[str, Any]) -> dict[str, object]:
+    """Persist generated paragraph representations separately from prompt definitions."""
+
+    payload = {
+        "document_id": document_id,
+        "blocks": [
+            {
+                "block_id": block.get("block_id"),
+                "chunk_ids": block.get("chunk_ids", []),
+                "page_number": block.get("page_number"),
+                "representations": block.get("representations", []),
+                "text": block.get("text", ""),
+            }
+            for block in _safe_list(document.get("blocks"))
+            if isinstance(block, dict)
+        ],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _write_json(_human_study_document_dir(document_id) / REPRESENTATIONS_NAME, payload)
+    return payload
+
+
+def _human_study_saved_paths(document_id: str, filenames: list[str]) -> dict[str, str]:
+    """Return absolute paths for files written by designer save actions."""
+
+    workspace = _human_study_document_dir(document_id)
+    return {filename: str(workspace / filename) for filename in filenames}
+
+
+def _write_human_study_payloads(document_id: str, payload: dict[str, Any]) -> None:
+    """Persist editable document, chunk, paragraph, and provider payloads."""
+
+    workspace = _human_study_document_dir(document_id)
+    provider_dir = workspace / "providers" / "opendataloader"
+    payload = _normalize_human_study_document(document_id, payload)
+    _write_json(workspace / DOCUMENT_JSON_NAME, payload)
+    _write_json(workspace / "chunks.json", {"pages": payload.get("pages", [])})
+    _write_json(
+        workspace / "paragraphs.json",
+        {
+            "blocks": [
+                {
+                    "block_id": block.get("block_id"),
+                    "chunk_ids": block.get("chunk_ids", []),
+                    "page_number": block.get("page_number"),
+                    "representations": block.get("representations", []),
+                    "section_path": block.get("section_path", []),
+                    "text": block.get("text", ""),
+                }
+                for block in _safe_list(payload.get("blocks"))
+                if isinstance(block, dict)
+            ]
+        },
+    )
+    provider_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(provider_dir / DOCUMENT_JSON_NAME, payload)
+
+
+def _human_study_document_id(value: str) -> str:
+    document_id = _safe_artifact_name(Path(value).stem or value).lower()
+    if not document_id:
+        raise HTTPException(status_code=400, detail="Invalid document id.")
+    return document_id
+
+
+def _human_study_document_dir(document_id: str) -> Path:
+    safe_id = _safe_artifact_name(document_id)
+    if safe_id != document_id:
+        raise HTTPException(status_code=400, detail="Invalid human-study document id.")
+    return HUMAN_STUDY_ROOT / "documents" / safe_id
+
+
+def _human_study_exam_id(value: str) -> str:
+    exam_id = _safe_artifact_name(Path(value).stem or value).lower()
+    if not exam_id:
+        raise HTTPException(status_code=400, detail="Invalid exam id.")
+    return exam_id
+
+
+def _human_study_exam_path(exam_id: str) -> Path:
+    safe_id = _human_study_exam_id(exam_id)
+    if safe_id != exam_id:
+        raise HTTPException(status_code=400, detail="Invalid human-study exam id.")
+    return HUMAN_STUDY_ROOT / "exams" / f"{safe_id}.json"
+
+
+def _human_study_pdf_path(document_id: str) -> Path:
+    workspace_pdf = _human_study_document_dir(document_id) / SOURCE_PDF_NAME
+    if workspace_pdf.exists():
+        return workspace_pdf
+    return HUMAN_STUDY_ROOT / "pdfs" / document_id / SOURCE_PDF_NAME
+
+
+def _renumber_human_study_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
+    """Assign saved designer paragraph IDs from top to bottom."""
+
+    renumbered: list[dict[str, Any]] = []
+    for index, block in enumerate(blocks, start=1):
+        if not isinstance(block, dict):
+            continue
+        renumbered.append({**block, "block_id": f"paragraph-{index}"})
+    return renumbered
+
+
+def _normalize_human_study_exam(payload: dict[str, Any], *, fallback_id: str) -> dict[str, object]:
+    """Normalize editable exam JSON into the Cloudflare export shape."""
+
+    exam_id = _human_study_exam_id(str(payload.get("id") or fallback_id))
+    document_id = _human_study_document_id(str(payload.get("document_id") or ""))
+    timing_mode = str(payload.get("timing_mode") or "").strip().lower()
+    time_limit_seconds = _safe_int(payload.get("time_limit_seconds"), 0)
+    if timing_mode not in {"countdown", "stopwatch"}:
+        timing_mode = "countdown" if time_limit_seconds > 0 else "stopwatch"
+    if timing_mode == "stopwatch":
+        time_limit_seconds = 0
+
+    representation_condition = payload.get("representation_condition")
+    if not isinstance(representation_condition, dict):
+        representation_condition = {}
+    visible_representations = [
+        str(item).strip()
+        for item in _safe_list(representation_condition.get("visible_representations"))
+        if str(item).strip()
+    ]
+    condition_id = str(representation_condition.get("id") or "-".join(visible_representations) or "none")
+
+    questions = []
+    for index, question in enumerate(_safe_list(payload.get("questions")), start=1):
+        if not isinstance(question, dict):
+            continue
+        choices = [str(choice) for choice in _safe_list(question.get("choices")) if str(choice).strip()]
+        if not choices:
+            choices = ["Choice 1", "Choice 2"]
+        answer_index = _safe_int(question.get("answer_index"), 0)
+        answer_index = min(max(answer_index, 0), len(choices) - 1)
+        questions.append(
+            {
+                "answer_index": answer_index,
+                "choices": choices,
+                "id": f"{exam_id}-q{index}",
+                "text": str(question.get("text") or f"Question {index}"),
+            }
+        )
+
+    return {
+        "document_id": document_id,
+        "enabled": bool(payload.get("enabled", True)),
+        "id": exam_id,
+        "question_set_id": str(payload.get("question_set_id") or f"{exam_id}-questions"),
+        "questionnaires": payload.get("questionnaires") if isinstance(payload.get("questionnaires"), dict) else {},
+        "questions": questions,
+        "representation_condition": {
+            "id": condition_id,
+            "label": str(representation_condition.get("label") or condition_id),
+            "visible_representations": visible_representations,
+        },
+        "time_limit_seconds": time_limit_seconds,
+        "timing_mode": timing_mode,
+        "title": str(payload.get("title") or exam_id),
+    }
+
+
+def _load_human_study_answer_key(question_set_id: str) -> list[dict[str, Any]]:
+    """Load private answer keys from local R2 exports or editable exam JSON."""
+
+    private_key_path = HUMAN_STUDY_ROOT / "private-r2" / "study-private" / "answer-keys" / f"{question_set_id}.json"
+    if private_key_path.exists():
+        payload = _read_json(private_key_path)
+        return [item for item in _safe_list(payload.get("answers")) if isinstance(item, dict)]
+
+    exam_root = HUMAN_STUDY_ROOT / "exams"
+    if exam_root.exists():
+        for path in sorted(exam_root.glob("*.json")):
+            exam = _read_json(path)
+            if str(exam.get("question_set_id") or "") != question_set_id:
+                continue
+            return [
+                {
+                    "answer_index": _safe_int(question.get("answer_index"), 0),
+                    "id": str(question.get("id") or f"{question_set_id}-q{index}"),
+                }
+                for index, question in enumerate(_safe_list(exam.get("questions")), start=1)
+                if isinstance(question, dict)
+            ]
+
+    raise HTTPException(status_code=400, detail="Answer key not found.")
+
+
+def _score_human_study_answers(answers: list[dict[str, Any]], answer_key: list[dict[str, Any]]) -> dict[str, object]:
+    """Score submitted answers while preserving unanswered questions as null."""
+
+    key_by_id = {str(item.get("id")): _safe_int(item.get("answer_index"), -1) for item in answer_key}
+    answer_by_id = {str(item.get("question_id")): item for item in answers if isinstance(item, dict)}
+    details = []
+    correct = 0
+    for question_id, correct_index in key_by_id.items():
+        answer = answer_by_id.get(question_id, {})
+        selected_raw = answer.get("selected_index")
+        selected_index = None if selected_raw is None else _safe_int(selected_raw, -1)
+        is_correct = selected_index is not None and selected_index == correct_index
+        if is_correct:
+            correct += 1
+        details.append(
+            {
+                "correct": is_correct,
+                "question_id": question_id,
+                "selected_index": selected_index if selected_index is not None and selected_index >= 0 else None,
+            }
+        )
+    return {"correct": correct, "details": details, "total": len(key_by_id)}
+
+
+def _normalize_human_study_document(document_id: str, payload: dict[str, Any]) -> dict[str, object]:
+    document = dict(payload)
+    blocks = [block for block in _safe_list(document.get("blocks")) if isinstance(block, dict)]
+    pages = [page for page in _safe_list(document.get("pages")) if isinstance(page, dict)]
+
+    chunk_to_blocks: dict[str, list[str]] = {}
+    chunk_page_numbers: dict[str, int] = {}
+    for page in pages:
+        for chunk in _safe_list(page.get("chunks")):
+            if not isinstance(chunk, dict):
+                continue
+            chunk_id = str(chunk.get("chunk_id") or "")
+            if chunk_id:
+                chunk_page_numbers[chunk_id] = _safe_int(chunk.get("page_number"), _safe_int(page.get("page_number"), 1))
+
+    normalized_blocks = []
+    for index, block in enumerate(blocks, start=1):
+        block_id = str(block.get("block_id") or f"paragraph-{index:04d}").strip()
+        chunk_ids = [str(chunk_id) for chunk_id in _safe_list(block.get("chunk_ids")) if str(chunk_id).strip()]
+        for chunk_id in chunk_ids:
+            chunk_to_blocks.setdefault(chunk_id, []).append(block_id)
+        page_number = _safe_int(block.get("page_number"), chunk_page_numbers.get(chunk_ids[0], 1) if chunk_ids else 1)
+        normalized_blocks.append(
+            {
+                **block,
+                "block_id": block_id,
+                "chunk_ids": chunk_ids,
+                "page_number": page_number,
+                "representations": _safe_list(block.get("representations")),
+                "section_path": [str(part) for part in _safe_list(block.get("section_path"))],
+                "text": str(block.get("text") or ""),
+            }
+        )
+
+    normalized_pages = []
+    for page in pages:
+        normalized_chunks = []
+        for chunk in _safe_list(page.get("chunks")):
+            if not isinstance(chunk, dict):
+                continue
+            chunk_id = str(chunk.get("chunk_id") or "")
+            normalized_chunks.append({**chunk, "block_ids": chunk_to_blocks.get(chunk_id, [])})
+        normalized_pages.append({**page, "chunks": normalized_chunks})
+
+    metadata = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
+    metadata = {**metadata, "paragraph_count": len(normalized_blocks)}
+    document.update(
+        {
+            "blocks": normalized_blocks,
+            "document_id": str(document.get("document_id") or document_id),
+            "metadata": metadata,
+            "page_count": _safe_int(document.get("page_count"), len(normalized_pages)),
+            "pages": normalized_pages,
+            "pdf_url": f"/study-cache/documents/{document_id}/source.pdf",
+            "study_document_id": document_id,
+        }
+    )
+    return document
 
 
 def _clear_payload_representations(payload: dict[str, object]) -> None:

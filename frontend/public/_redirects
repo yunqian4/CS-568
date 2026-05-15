@@ -1,3 +1,9 @@
 /reader/* /index.html 200
+/prepare-document /index.html 200
+/prepare-document/* /index.html 200
+/exam-designer /index.html 200
+/exam-designer/* /index.html 200
+/exam /index.html 200
+/exam/* /index.html 200
 /study /index.html 200
 /study/* /index.html 200

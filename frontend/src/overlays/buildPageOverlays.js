@@ -4,6 +4,7 @@ import { assignOverlayRepresentations } from './rules';
  * Build overlay containers from paragraph blocks and source chunks.
  */
 export function buildOverlayState(document) {
+  const showUnmappedChunkLabels = document?.metadata?.designer_mode === true;
   const llmRepresentationsEnabled = document?.metadata?.llm_representations?.enabled === true;
   const chunksById = new Map();
   for (const page of document.pages ?? []) {
@@ -14,6 +15,7 @@ export function buildOverlayState(document) {
 
   const overlaysByPageNumber = new Map();
   const blockCountByPageNumber = new Map();
+  const overlayedChunkIds = new Set();
 
   for (const block of document.blocks ?? []) {
     blockCountByPageNumber.set(
@@ -64,8 +66,30 @@ export function buildOverlayState(document) {
         width: chunk.width,
         height: chunk.height,
       });
+      overlayedChunkIds.add(chunkId);
       overlaysByPageNumber.set(chunk.page_number, pageOverlays);
     });
+  }
+
+  if (showUnmappedChunkLabels) {
+    for (const chunk of chunksById.values()) {
+      if (overlayedChunkIds.has(chunk.chunk_id)) {
+        continue;
+      }
+      const pageOverlays = overlaysByPageNumber.get(chunk.page_number) ?? [];
+      pageOverlays.push({
+        blockId: '',
+        chunkId: chunk.chunk_id,
+        overlayId: `unmapped:${chunk.chunk_id}`,
+        pageNumber: chunk.page_number,
+        representations: [buildChunkLabelRepresentation(chunk)],
+        x: chunk.x,
+        y: chunk.y,
+        width: chunk.width,
+        height: chunk.height,
+      });
+      overlaysByPageNumber.set(chunk.page_number, pageOverlays);
+    }
   }
 
   for (const overlays of overlaysByPageNumber.values()) {
@@ -88,5 +112,16 @@ function buildBlockLabelRepresentation(block, chunk) {
     background_color: '#234b65',
     background_opacity: 0.6,
     text: `${block.block_id} | ${chunk.chunk_id}`,
+  };
+}
+
+function buildChunkLabelRepresentation(chunk) {
+  return {
+    kind: 'block-label',
+    label: 'Chunk',
+    value: chunk.chunk_id,
+    background_color: '#234b65',
+    background_opacity: 0.6,
+    text: chunk.chunk_id,
   };
 }

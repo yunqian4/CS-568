@@ -119,9 +119,11 @@ class LlmRepresentationConfig:
         summary_word_ratio: float | None = None,
         max_keywords: int | None = None,
         representations: list[RepresentationDefinition] | None = None,
+        parallel_jobs: int | None = None,
     ) -> "LlmRepresentationConfig":
         """Build a validated config from request values and environment defaults."""
 
+        parallel_source = parallel_jobs if parallel_jobs is not None else os.environ.get("OPENAI_REPRESENTATION_PARALLELISM")
         return cls(
             enabled=bool(enabled),
             api_key=api_key.strip() if api_key and api_key.strip() else None,
@@ -131,7 +133,7 @@ class LlmRepresentationConfig:
             summary_word_ratio=_bounded_float(summary_word_ratio, 0.15, minimum=0.02, maximum=0.80),
             max_keywords=_positive_int(max_keywords, 5),
             representations=_normalize_definitions(representations),
-            parallel_jobs=_bounded_int(os.environ.get("OPENAI_REPRESENTATION_PARALLELISM"), 2, minimum=1, maximum=8),
+            parallel_jobs=_bounded_int(parallel_source, 2, minimum=1, maximum=8),
             timeout_seconds=_bounded_float(os.environ.get("OPENAI_REQUEST_TIMEOUT_SECONDS"), 300.0, minimum=10.0, maximum=600.0),
             request_retries=_bounded_int(os.environ.get("OPENAI_REQUEST_RETRIES"), 3, minimum=0, maximum=5),
         )

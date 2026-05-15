@@ -86,6 +86,9 @@ export function writeSessionRepresentationSettings(settings) {
 }
 
 export function toRepresentationDefinitions(settings) {
+  if (Array.isArray(settings) && !settings.length) {
+    return [];
+  }
   return normalizeRepresentationSettings(settings).map((setting) => ({
     name: setting.name.trim(),
     prompt: setting.prompt.trim(),

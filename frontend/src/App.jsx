@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LandingPage from './components/LandingPage';
+import DesignerPage from './components/DesignerPage';
+import ExamDesignerPage from './components/ExamDesignerPage';
+import ExamPage from './components/ExamPage';
 import QuizPanel from './components/QuizPanel';
 import ReaderPage from './components/ReaderPage';
 import ResultsPage from './components/ResultsPage';
@@ -23,6 +26,18 @@ function isStudyRoute() {
   return window.location.pathname === '/study' || window.location.pathname.startsWith('/study/');
 }
 
+function isDesignerRoute() {
+  return window.location.pathname === '/prepare-document' || window.location.pathname.startsWith('/prepare-document/');
+}
+
+function isExamDesignerRoute() {
+  return window.location.pathname === '/exam-designer' || window.location.pathname.startsWith('/exam-designer/');
+}
+
+function isExamRoute() {
+  return window.location.pathname === '/exam' || window.location.pathname.startsWith('/exam/');
+}
+
 export default function App() {
   const [documentData, setDocumentData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,6 +52,9 @@ export default function App() {
   const [quizQuestions, setQuizQuestions] = useState(null);
   const [quizFetchError, setQuizFetchError] = useState('');
   const routeDocumentId = useMemo(getRouteDocumentId, [window.location.pathname]);
+  const designerRoute = useMemo(isDesignerRoute, [window.location.pathname]);
+  const examDesignerRoute = useMemo(isExamDesignerRoute, [window.location.pathname]);
+  const examRoute = useMemo(isExamRoute, [window.location.pathname]);
   const studyRoute = useMemo(isStudyRoute, [window.location.pathname]);
   const reportedRepresentationFailuresRef = useRef(new Set());
 
@@ -310,6 +328,18 @@ export default function App() {
   const activeRepresentationSettings = quizMode && quizRepresentation
     ? representationSettings.map((s) => ({ ...s, enabled: s.id === quizRepresentation }))
     : representationSettings;
+
+  if (designerRoute) {
+    return <DesignerPage />;
+  }
+
+  if (examDesignerRoute) {
+    return <ExamDesignerPage />;
+  }
+
+  if (examRoute) {
+    return <ExamPage />;
+  }
 
   if (studyRoute) {
     return <StudyPage />;

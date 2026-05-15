@@ -12,7 +12,10 @@ function nextCustomName(settings) {
 }
 
 export default function ReaderPage({
+  defaultShowDebugLabels = false,
   document,
+  forceDebugLabels = false,
+  headerKicker = 'Reader',
   onClearRepresentationCookie,
   onLoadRepresentationCookie,
   onRegenerateRepresentations,
@@ -25,15 +28,17 @@ export default function ReaderPage({
   representationSettings,
   resetLabel = 'Import another PDF',
   settingsMessage,
+  showFloatingSettings = true,
 }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [showDebugLabels, setShowDebugLabels] = useState(false);
+  const [showDebugLabels, setShowDebugLabels] = useState(defaultShowDebugLabels);
   const [regenerationApiKey, setRegenerationApiKey] = useState('');
   const [regenerationModel, setRegenerationModel] = useState(document.metadata?.llm_representations?.model ?? '');
+  const debugLabelsVisible = forceDebugLabels || showDebugLabels;
   const visibleRepresentations = Object.fromEntries(
     [
       ...representationSettings.flatMap((setting) => [[setting.id, setting.enabled], [setting.name, setting.enabled]]),
-      ['block-label', showDebugLabels],
+      ['block-label', debugLabelsVisible],
     ],
   );
 
@@ -67,7 +72,7 @@ export default function ReaderPage({
     <main className="reader-shell">
       <header className="reader-header">
         <div>
-          <p className="reader-kicker">Reader</p>
+          <p className="reader-kicker">{headerKicker}</p>
           <h1 className="reader-title">{document.title}</h1>
         </div>
 
@@ -89,7 +94,7 @@ export default function ReaderPage({
         {quizPanel}
       </div>
 
-      {quizMode ? null : <div className="reader-settings">
+      {quizMode || !showFloatingSettings ? null : <div className="reader-settings">
         <RepresentationStatusIcon status={document.metadata?.llm_representations} />
         {isSettingsOpen ? (
           <div className="reader-settings-panel">
@@ -99,7 +104,8 @@ export default function ReaderPage({
             </div>
             <label className="inline-control reader-debug-toggle">
               <input
-                checked={showDebugLabels}
+                checked={debugLabelsVisible}
+                disabled={forceDebugLabels}
                 onChange={(event) => setShowDebugLabels(event.target.checked)}
                 type="checkbox"
               />

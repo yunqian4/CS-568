@@ -4,6 +4,7 @@
   "enabled": true,
   "document_id": "wikiworkshop-2025",
   "question_set_id": "wikiworkshop-2025-summary",
+  "timing_mode": "countdown",
   "time_limit_seconds": 900,
   "representation_condition": {
     "id": "summary",

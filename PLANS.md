@@ -12,6 +12,9 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
   - parser/provider choice between `opendataloader`, `native`, `docling`, and `grobid`
   - optional LLM-generated keywords and summaries
 - The `/study` route supports controlled cached tests for static Cloudflare Pages deployments.
+- The `/prepare-document` route supports local visual preparation of cached-study documents before export, including upload/preprocess, paragraph matching, prompt editing, and explicit representation generation.
+- The `/exam-designer` route supports local visual exam JSON creation and editing.
+- The `/exam` route supports backend-free cached exams on Cloudflare Pages.
 - Cached tests use `human-study/` as the designer workspace for PDFs, editable parsed document JSON, generated representations, exam settings, global scheduler settings, public question JSON without answer keys, and private R2 answer keys.
 - The backend parser is a replaceable module with multiple provider options.
 - Uploaded or imported PDFs are stored in content-addressed folders under `dat/temp/<sha256>/`.
@@ -133,10 +136,18 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - A real PDF text layer is the intended mechanism for selection and copy inside the reader.
 - Cached-study assets are exported by `scripts/export_study_cache.py` into `frontend/public/study-cache/`.
 - Individual PDFs can be prepared through staged `human-study/scripts`: extraction/paragraph segmentation first, editable representation generation second, and Cloudflare export third.
-- Editable intermediates live under `human-study/documents/<document-id>/` as `chunks.json`, `paragraphs.json`, `document.json`, and generated representation files.
+- Editable intermediates live under `human-study/documents/<document-id>/` as `chunks.json`, `paragraphs.json`, `document.json`, `representation-prompts.json`, and generated representation files.
+- The local `/prepare-document` route loads editable human-study documents, uploads new PDFs for OpenDataLoader plus LLM semantic processing, reuses the reader PDF interface, forces chunk ID labels on the PDF, and uses three right-pane tabs: document upload and preprocess, paragraph matching, and representation generation.
+- Paragraph matching edits only paragraph-to-chunk assignments. Designers click chunk rows to toggle multi-selection for each paragraph and can add new paragraphs above or below existing paragraphs.
+- The designer upload flow runs OpenDataLoader only and intentionally leaves block representations empty; the designer matches chunks to paragraphs, edits prompts, and then clicks `Apply` in the representation generation tab.
+- Paragraph IDs in the designer are view-order labels until save; saved documents renumber paragraph blocks as `paragraph-1`, `paragraph-2`, and so on.
+- The local FastAPI backend exposes `/api/human-study/documents` endpoints for listing editable documents, uploading/processing PDFs, serving their source PDFs, saving document/chunk/paragraph JSON, saving representation prompts into `representation-prompts.json` plus compatible `config.json`, and explicitly generating representation files.
+- When the local backend is unavailable, `/prepare-document` can inspect exported `frontend/public/study-cache` assets and download edited JSON files instead of writing directly to disk.
 - The exporter merges completed cached representation files into `document.json`, rewrites `pdf_url` to the static study-cache PDF path, and emits public question files without `answer_index`.
 - The exporter emits private R2 answer-key files under ignored `study/private-r2/study-private/answer-keys/`.
 - Cloudflare Pages Functions under `functions/api/study/` provide `POST /api/study/score-submit` for server-side scoring and R2 result writes plus `GET /api/study/health` for binding checks.
+- The `/exam` runner reads only static study-cache assets and the Pages Function scoring endpoint. It samples exported exams, starts only after the participant clicks Start, hides debug IDs, shows configured representations, auto-submits countdown exams at expiry, and shows a submit button in both countdown and stopwatch modes.
+- Exam submission accepts unanswered questions as null selections, not as a blocking validation error. Successful submission notifies the participant and transitions to an ended-session screen.
 - `wrangler.toml` defines the Pages build output and the `STUDY_RESULTS` R2 binding used by the study Functions.
 - `run-test.bat` runs the `human-study` Cloudflare exporter, builds the frontend, and starts a local Cloudflare Pages preview for `/study`.
 - `human-eval.md` documents the operational workflow for adding PDFs, editing intermediates, creating exam settings, configuring the scheduler, exporting static assets, uploading private R2 answer keys, and deploying the study.
@@ -174,6 +185,14 @@ Deliver a web-based PDF reader prototype that accepts PDF upload or URL input, o
 - Users can import PDFs by file or URL and enter the reader after confirmation.
 - The frontend defaults to OpenDataLoader with LLM semantic grouping enabled.
 - `/study` loads only static cached assets and does not call FastAPI document import, representation polling, OpenDataLoader, Java, or OpenAI.
+- `/prepare-document` remains a local preparation route and is allowed to call the FastAPI `/api/human-study/*` endpoints when the backend is running.
+- Study designers can use `/prepare-document` to select an existing prepared document or upload a new PDF and process it with OpenDataLoader only.
+- Study designers can use `/prepare-document` to add and remove paragraph blocks, insert paragraphs above or below another paragraph, map each paragraph to one or more chunk IDs by toggling chunk selection, preview the selected chunk text, and save the document JSON sidecars with ordered paragraph IDs.
+- Study designers can use `/prepare-document` to add, edit, remove any prompt definition, save prompt definitions to a separate prompt file, and then explicitly apply those prompts to generate document representations.
+- The representation generation pane shows a progress bar during Apply, and Apply caps OpenAI representation concurrency at four calls.
+- Saving documents and saving representations alerts the designer with the backend file paths that were written. Prompt definitions are saved separately from generated representation data.
+- Study designers can use `/exam-designer` to create, edit, and remove exams. Each exam specifies one prepared document, timing mode (`countdown` or `stopwatch`), visible representation names through multi-select checkboxes, and multiple-choice questions with editable choices and private answer indexes. Question IDs are generated automatically from exam id and question order.
+- Local Vite/FastAPI preview can use the FastAPI `/api/study/score-submit` mirror; Cloudflare Pages uses `functions/api/study/score-submit.js`.
 - Public study question files do not contain answer keys.
 - Study answer keys are available only through the `STUDY_RESULTS` R2 binding.
 - Study submissions are scored server-side and written to R2 as one JSON object per session.

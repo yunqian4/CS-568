@@ -27,7 +27,7 @@ export default function PdfReaderCanvas({ document, representationSettings, visi
   );
   const overlayState = useMemo(
     () => buildOverlayState(document),
-    [document.blocks, document.metadata?.llm_representations?.enabled, document.pages],
+    [document.blocks, document.metadata?.designer_mode, document.metadata?.llm_representations?.enabled, document.pages],
   );
   const representationSettingsMap = useMemo(
     () => buildRepresentationSettingsMap(representationSettings),

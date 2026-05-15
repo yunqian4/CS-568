@@ -723,6 +723,294 @@ select {
   text-align: center;
 }
 
+/* Study designer */
+
+.designer-panel {
+  width: 460px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid rgba(23, 33, 33, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.97);
+  box-shadow: 0 14px 36px rgba(54, 38, 18, 0.14);
+}
+
+.designer-upload-form,
+.designer-generation-box {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(233, 223, 204, 0.28);
+}
+
+.designer-upload-compact {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.designer-helper-text {
+  margin: 6px 0 0;
+  color: rgba(23, 33, 33, 0.64);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.designer-panel-header,
+.designer-actions,
+.designer-section-heading,
+.designer-card-row,
+.designer-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.designer-panel-header {
+  align-items: flex-end;
+}
+
+.designer-panel-header .settings-field {
+  flex: 1;
+}
+
+.designer-source-chip {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(23, 33, 33, 0.14);
+  border-radius: 999px;
+  background: rgba(233, 223, 204, 0.52);
+  color: rgba(23, 33, 33, 0.7);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.designer-actions {
+  flex-wrap: wrap;
+}
+
+.designer-bottom-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.designer-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.designer-progress progress {
+  width: 100%;
+  height: 12px;
+  accent-color: #234b65;
+}
+
+.designer-progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(23, 33, 33, 0.68);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.designer-tabs {
+  padding: 4px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(233, 223, 204, 0.32);
+}
+
+.designer-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(23, 33, 33, 0.68);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.designer-tab-active {
+  background: #172121;
+  color: #fff8ea;
+}
+
+.designer-editor-section,
+.designer-card-list,
+.designer-card {
+  display: grid;
+  gap: 12px;
+}
+
+.designer-section-heading,
+.designer-card-row {
+  justify-content: space-between;
+}
+
+.designer-card {
+  padding: 14px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.designer-card-row .settings-field {
+  flex: 1;
+}
+
+.designer-chunk-select {
+  min-height: 132px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.designer-chunk-button-grid {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.designer-chunk-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid rgba(23, 33, 33, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #172121;
+  cursor: pointer;
+  text-align: left;
+}
+
+.designer-chunk-button span {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.designer-chunk-button small {
+  color: rgba(23, 33, 33, 0.64);
+  line-height: 1.35;
+}
+
+.designer-chunk-button-selected {
+  border-color: #234b65;
+  background: rgba(35, 75, 101, 0.13);
+  box-shadow: inset 3px 0 0 #234b65;
+}
+
+.designer-paragraph-preview {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(23, 33, 33, 0.1);
+  border-radius: 6px;
+  background: rgba(233, 223, 204, 0.22);
+}
+
+.designer-paragraph-preview strong {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: rgba(23, 33, 33, 0.58);
+}
+
+.designer-paragraph-preview p {
+  margin: 0;
+  color: #172121;
+  font-size: 0.86rem;
+  line-height: 1.42;
+}
+
+.designer-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.designer-chunk-id {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #234b65;
+  overflow-wrap: anywhere;
+}
+
+.designer-chunk-meta {
+  color: rgba(23, 33, 33, 0.62);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.exam-designer-shell {
+  width: min(1040px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  border: 1px solid rgba(23, 33, 33, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 251, 245, 0.92);
+  box-shadow: 0 24px 60px rgba(54, 38, 18, 0.16);
+}
+
+.exam-designer-form {
+  display: grid;
+  gap: 16px;
+}
+
+.exam-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.exam-choice-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.exam-representation-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+@media (max-width: 1120px) {
+  .reader-body {
+    flex-direction: column;
+  }
+
+  .designer-panel,
+  .quiz-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
+
+  .exam-grid,
+  .exam-choice-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Results page ── */
 
 .results-shell {

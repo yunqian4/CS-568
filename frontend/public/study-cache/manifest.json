@@ -48,6 +48,7 @@
         ]
       },
       "time_limit_seconds": 900,
+      "timing_mode": "countdown",
       "title": "WikiWorkshop Keywords Example"
     },
     {
@@ -91,6 +92,7 @@
         ]
       },
       "time_limit_seconds": 900,
+      "timing_mode": "countdown",
       "title": "WikiWorkshop Summary Example"
     }
   ],

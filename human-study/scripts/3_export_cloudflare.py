@@ -156,6 +156,7 @@ def export_exam(exam: dict[str, Any]) -> dict[str, Any]:
         "questionnaires": exam.get("questionnaires", {}),
         "representation_condition": exam.get("representation_condition", {}),
         "time_limit_seconds": int(exam.get("time_limit_seconds") or 0),
+        "timing_mode": exam.get("timing_mode") or ("countdown" if int(exam.get("time_limit_seconds") or 0) > 0 else "stopwatch"),
         "title": exam.get("title") or exam["id"],
     }
     return public_exam

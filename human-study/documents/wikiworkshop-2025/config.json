@@ -1,35 +1,35 @@
 {
-  "provider": "opendataloader",
-  "source_name": "",
-  "semantic": {
-    "enabled": true
-  },
   "llm": {
-    "enabled": true,
     "api_key": "",
-    "model": "gpt-5-nano",
+    "enabled": true,
     "keyword_min_words": 20,
-    "summary_min_words": 35,
-    "summary_word_ratio": 0.15,
     "max_keywords": 5,
+    "model": "gpt-5-nano",
     "openai_representation_parallelism": 2,
     "openai_request_retries": 3,
     "openai_request_timeout_seconds": 300,
     "representations": [
       {
-        "name": "keywords",
-        "prompt": "Extract concise, specific noun phrases from the paragraph text. Use the text's own terminology and avoid generic UI or process labels.",
         "background_color": "#7a4a12",
-        "background_opacity": 1,
-        "enabled": true
+        "background_opacity": 1.0,
+        "enabled": true,
+        "name": "keywords",
+        "prompt": "Extract concise, specific noun phrases from the paragraph text. Use the text's own terminology and avoid generic UI or process labels."
       },
       {
-        "name": "summary",
-        "prompt": "Write one concise summary of the paragraph's main claim or finding. Use only the supplied paragraph text.",
         "background_color": "#263238",
-        "background_opacity": 1,
-        "enabled": true
+        "background_opacity": 1.0,
+        "enabled": true,
+        "name": "summary",
+        "prompt": "Write one concise summary of the paragraph's main claim or finding. Use only the supplied paragraph text."
       }
-    ]
-  }
+    ],
+    "summary_min_words": 35,
+    "summary_word_ratio": 0.15
+  },
+  "provider": "opendataloader",
+  "semantic": {
+    "enabled": true
+  },
+  "source_name": ""
 }
